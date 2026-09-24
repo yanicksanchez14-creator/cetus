@@ -67,7 +67,7 @@ measured results.
 | Speed of sound | 1.5 km/s (true value biased ±0.4%) | nominal seawater |
 | Spreading loss | 15·log₁₀ r | practical spreading |
 | Call source levels | humpback 165, fin 189, blue 189 dB re 1 µPa @ 1 m | Au et al. 2006; Širović et al. 2007 |
-| Ship source level | 186 dB @ 18 kn, +1.5 dB/kn | McKenna et al. 2012; slope measured at MBARI MARS in my [ocean-noise project](#related-work) |
+| Ship source level | 186 dB @ 18 kn, +1.5 dB/kn | level: McKenna et al. 2012; slope: assumption (see [related work](#related-work)) |
 | Disturbance threshold | 120 dB re 1 µPa | NMFS Level B (continuous noise) |
 | Strike lethality | logistic in speed | Vanderlaan & Taggart 2007 |
 | Ship | 40 MW @ 18 kn, cube law; SFOC 175 g/kWh; 1.5 MW aux | illustrative large container ship |
@@ -128,8 +128,9 @@ tests/        vitest suites
 ## Related work
 
 - **Ocean noise project:** measured ship noise vs humpback song at MBARI's MARS hydrophone (Monterey Bay,
-  890 m), using the Google/NOAA humpback detector and NOAA AIS data. The +1.5 dB/kn ship-noise slope used here
-  comes from that analysis.
+  890 m), using the Google/NOAA humpback detector and NOAA AIS data. Across 197 ship passages (Oct–Dec 2018), faster ships lifted the 63 Hz band
+  measurably more above background (+0.29 dB/kn, 95% CI 0.17–0.39, for ships ~20 km away). That confirms the direction
+  of the speed effect; the source-level slope used here (+1.5 dB/kn) is still an assumption.
 - Whale Safe (Benioff Ocean Science Laboratory) already publishes near-real-time whale presence and ship
   cooperation for the Santa Barbara Channel and San Francisco. Cetus explores the next step: **position-level
   localization and per-ship, option-by-option routing decisions**.

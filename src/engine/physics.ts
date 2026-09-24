@@ -59,7 +59,7 @@ export function nominalRangeKm(sp: Species): number {
 // ---------------- Ship noise ----------------
 /** Broadband source level of a large container ship (dB re 1 uPa @ 1 m).
  *  Reference 186 dB at 18 kn (McKenna et al. 2012 measured 177-188 dB for modern commercial ships);
- *  +1.5 dB per knot = speed-vs-noise slope measured at MBARI's MARS hydrophone in Project 1 (preview). */
+ *  +1.5 dB per knot = assumed source-level slope (illustrative; real ships vary widely). */
 export const SHIP_SL_REF = 186;
 export const SHIP_SL_REF_KN = 18;
 export const SHIP_DB_PER_KNOT = 1.5;
@@ -132,7 +132,7 @@ export const ASSUMPTIONS: Assumption[] = [
   { name: "Whale call loudness", value: "Humpback 165 · Fin 189 · Blue 189 dB re 1 µPa @ 1 m", source: "Au et al. 2006; Širović et al. 2007" },
   { name: "Detection ranges", value: "Humpback ~20 km · Fin ~50 km · Blue ~100 km", source: "Band noise set to match published ranges (Širović et al. 2007)" },
   { name: "Arrival-time error", value: "20 ms per sensor (adjustable)", source: "Clock sync + multipath; GPS-timed buoys can do better" },
-  { name: "Ship noise", value: "186 dB @ 18 kn, +1.5 dB/kn", source: "McKenna et al. 2012 (177-188 dB); slope measured at MBARI MARS (Project 1)" },
+  { name: "Ship noise", value: "186 dB @ 18 kn, +1.5 dB/kn", source: "Level: McKenna et al. 2012 (177-188 dB). Slope: assumption; faster ships were measurably louder at MBARI MARS (+0.3 dB/kn above background ~20 km away)" },
   { name: "Disturbance threshold", value: "120 dB re 1 µPa", source: "NMFS Level B behavioural threshold, continuous noise" },
   { name: "Strike lethality", value: "31% @ 10 kn · 78% @ 15 kn", source: "Vanderlaan & Taggart 2007 (very large ships may be lethal at all speeds: Garrison et al. 2025)" },
   { name: "Ship power", value: "40 MW @ 18 kn, P ∝ v³", source: "Illustrative container ship; cube law (Psaraftis & Lagouvardou 2023)" },
