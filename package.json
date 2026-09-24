@@ -1,0 +1,37 @@
+{
+  "name": "cetus",
+  "version": "1.0.0",
+  "description": "Acoustic whale localization and strike-aware ship routing: a transparent simulation.",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "test": "vitest run",
+    "preview": "vite preview"
+  },
+  "keywords": [
+    "whales",
+    "ship-strikes",
+    "hydrophone",
+    "tdoa",
+    "kalman-filter",
+    "deck.gl",
+    "simulation"
+  ],
+  "author": "Yanick Sanchez",
+  "license": "MIT",
+  "dependencies": {
+    "@deck.gl/core": "^9.4.0",
+    "@deck.gl/extensions": "^9.4.0",
+    "@deck.gl/layers": "^9.4.0",
+    "deck.gl": "^9.4.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.2",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.1",
+    "vite-plugin-singlefile": "^2.3.3",
+    "vitest": "^5.0.1"
+  },
+  "private": true,
+  "type": "module"
+}

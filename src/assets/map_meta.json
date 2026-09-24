@@ -1,0 +1,82 @@
+{
+ "images": [
+  {
+   "name": "california",
+   "file": "relief_california.webp",
+   "bounds": [
+    -127.001953125,
+    32.199278800401224,
+    -116.7978515625,
+    39.002013175401224
+   ],
+   "size": [
+    1161,
+    774
+   ],
+   "detail": false
+  },
+  {
+   "name": "sf_monterey",
+   "file": "relief_sf_monterey.webp",
+   "bounds": [
+    -124.200439453125,
+    35.699446645155135,
+    -121.5,
+    38.350447621717635
+   ],
+   "size": [
+    2400,
+    2356
+   ],
+   "detail": true
+  },
+  {
+   "name": "socal",
+   "file": "relief_socal.webp",
+   "bounds": [
+    -121.2000732421875,
+    32.90005926397963,
+    -117.599853515625,
+    34.79959539679213
+   ],
+   "size": [
+    2400,
+    1266
+   ],
+   "detail": true
+  }
+ ],
+ "depth": [
+  {
+   "name": "california",
+   "file": "depth_california.bin",
+   "nx": 580,
+   "ny": 387,
+   "west": -127.001953125,
+   "north": 39.002013175401224,
+   "cell": 0.017578125,
+   "detail": false
+  },
+  {
+   "name": "sf_monterey",
+   "file": "depth_sf_monterey.bin",
+   "nx": 614,
+   "ny": 603,
+   "west": -124.200439453125,
+   "north": 38.350447621717635,
+   "cell": 0.00439453125,
+   "detail": true
+  },
+  {
+   "name": "socal",
+   "file": "depth_socal.bin",
+   "nx": 819,
+   "ny": 432,
+   "west": -121.2000732421875,
+   "north": 34.79959539679213,
+   "cell": 0.00439453125,
+   "detail": true
+  }
+ ],
+ "source": "GMRT (Lamont-Doherty Earth Observatory), CC-BY 4.0"
+}
