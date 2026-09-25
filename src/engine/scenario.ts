@@ -1,7 +1,7 @@
 /**
  * Scenario design: where the whales are, and which buoys exist in "single buoy" mode.
- * Encounter whales are placed in the real strike hotspots (Rockwood et al. 2017) and steered so they
- * cross the lane at about the time the ship arrives -> every voyage contains real decisions.
+ * Each encounter area sits in a real strike hotspot (Rockwood et al. 2017). In a voyage it gets a whale ~85% of the time,
+ * at a random spot (±25 km along the lane) heading to cross within ±25 min of the ship: close calls happen by chance.
  */
 import type { LonLat } from "./geo";
 import type { SpeciesId } from "./physics";
@@ -19,7 +19,7 @@ export interface ScenarioDef {
 }
 
 export const HOTSPOTS = [
-  { at: [-122.85, 37.62] as LonLat, label: "Greater Farallones", note: "~17% of modeled humpback strike deaths on the US West Coast" },
+  { at: [-122.85, 37.62] as LonLat, label: "Greater Farallones", note: "~19% of modeled humpback strike deaths on the US West Coast (Greater Farallones NMS)" },
   { at: [-119.9, 34.18] as LonLat, label: "Santa Barbara Channel", note: "Blue whale strike hotspot" },
   { at: [-118.45, 33.72] as LonLat, label: "LA / Long Beach approach", note: "Highest modeled blue whale strike density" },
 ];
@@ -34,7 +34,7 @@ export const SCENARIOS: Record<string, ScenarioDef> = {
     ],
     background: [
       { species: "humpback", at: [-122.05, 36.80] },
-      { species: "humpback", at: [-122.95, 37.75] },
+      { species: "humpback", at: [-123.05, 37.70] },
       { species: "fin", at: [-122.95, 36.55] },
       { species: "blue", at: [-120.35, 33.95] },
       { species: "blue", at: [-119.2, 33.80] },

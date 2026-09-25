@@ -51,10 +51,19 @@ export interface SpeedZone {
   v: number; // knots
 }
 export interface Offset {
-  s0: number; // start of ramp-out
-  s1: number; // end of ramp-back
+  s0: number; // start of the turn away from the lane
+  s1: number; // end of the gradual return to the lane
   d: number; // km, + = to the right of the direction of travel
-  ramp: number; // km
+  ramp: number; // km over which the ship eases out (turn away)
+  rampBack?: number; // km over which it eases back (defaults to ramp); longer = gentler rejoin
+  /** Sideways offset at s0 (non-zero when a new plan starts mid-manoeuvre, from where the ship actually is). */
+  d0?: number;
+}
+
+/** Along-track distance needed to shift d km sideways with a heading change of at most maxDeg degrees.
+ *  The smoothstep profile's steepest slope is 1.5·d/ramp, so ramp = 1.5·d / tan(maxDeg). */
+export function rampForAngle(d: number, maxDeg: number): number {
+  return (1.5 * Math.abs(d)) / Math.tan((maxDeg * Math.PI) / 180);
 }
 export interface Plan {
   baseSpeed: number; // knots
@@ -130,10 +139,17 @@ const smooth = (x: number) => (x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x));
 
 export function offsetAt(plan: Plan, s: number): number {
   const o = plan.offset;
-  if (!o || s <= o.s0 || s >= o.s1) return 0;
-  const up = smooth((s - o.s0) / o.ramp);
-  const down = smooth((o.s1 - s) / o.ramp);
-  return o.d * Math.min(up, down);
+  if (!o || s >= o.s1) return 0;
+  const d0 = o.d0 ?? 0;
+  if (s <= o.s0) return d0;
+  const out = s < o.s0 + o.ramp ? d0 + (o.d - d0) * smooth((s - o.s0) / o.ramp) : o.d;
+  const back = o.rampBack ?? o.ramp;
+  return s > o.s1 - back ? out * smooth((o.s1 - s) / back) : out;
+}
+
+/** Last along-route distance where the plan's sideways offset is non-zero. */
+export function offsetEnd(plan: Plan): number {
+  return plan.offset ? plan.offset.s1 : 0;
 }
 
 export function speedAt(plan: Plan, s: number): number {
@@ -144,9 +160,21 @@ export function speedAt(plan: Plan, s: number): number {
 
 /** Ship position (with any offset) at along-route distance s. */
 export function shipPos(route: Route, plan: Plan, s: number): XY {
-  const { p, dir } = route.at(s);
+  const { p } = route.at(s);
   const off = offsetAt(plan, s);
-  return [p[0] + dir[1] * off, p[1] - dir[0] * off];
+  if (Math.abs(off) < 1e-9) return p;
+  // Offset along a smoothed normal: at a bend in the lane the sideways direction turns gradually,
+  // so an offset track rounds the corner instead of kinking.
+  const n = smoothDir(route, s, Math.min(8, 1.5 * Math.abs(off) + 2));
+  return [p[0] + n[1] * off, p[1] - n[0] * off];
+}
+
+function smoothDir(route: Route, s: number, half: number): XY {
+  const a = route.at(Math.max(0, s - half)).p;
+  const b = route.at(Math.min(route.length, s + half)).p;
+  const dx = b[0] - a[0], dy = b[1] - a[1];
+  const L = Math.hypot(dx, dy) || 1;
+  return [dx / L, dy / L];
 }
 
 export function shipHeading(route: Route, plan: Plan, s: number): number {

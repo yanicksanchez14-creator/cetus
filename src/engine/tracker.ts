@@ -5,6 +5,7 @@
  * so the tracker never uses the true identity of a whale.
  */
 import type { Fix } from "./localize";
+import type { SpeciesId } from "./physics";
 
 export interface Track {
   id: number;
@@ -14,15 +15,25 @@ export interface Track {
   t: number; // time of state, s
   lastUpdate: number;
   nFixes: number;
+  sightings?: number; // thermal-camera sightings (direct observations)
+  /** species, from the call type (frequency band); a track only ever takes fixes of its own species */
+  species?: SpeciesId;
   history: { t: number; x: number; y: number }[];
 }
 
-// Process noise (random acceleration, km²/s³). Calibrated to whale behaviour: heading wanders ~0.7 rad per hour
-// at 2-4 kn, i.e. velocity changes of ~1 m/s per hour -> q ≈ (0.0013 km/s)² / 3600 s ≈ 5e-10.
-const Q_ACC = 5e-10;
+// Process noise (random acceleration, km²/s³), calibrated by simulating the whale model (tests/forecast.test.ts) over
+// 30-60 min forecasts. Sideways (heading wander ~0.7 rad/h): q ≈ 3.3e-11·v². Along the path (speed drift, which
+// saturates): q ≈ 1.45e-10·v^0.85 (v in knots). E.g. after an hour a 2 kn whale is ~1.4 km off sideways and ~1.8 km
+// along its path; a 6 kn whale ~4.0 km sideways and ~3.0 km along.
+const Q_LAT = 3.3e-11;
+const Q_ALONG = 1.45e-10;
 const V0_VAR = (2.2 / 1000) ** 2; // initial velocity uncertainty: ~2.2 m/s (≈4 kn)
 const GATE = 16; // Mahalanobis² gate for assigning a fix to a track
 export const TRACK_TIMEOUT_S = 40 * 60;
+/** A fix this close to a recent track of the same species re-attaches to it instead of starting a new track. */
+const REATTACH_KM = 3;
+/** Same-species tracks closer than this are merged (one whale seen twice). */
+const MERGE_KM = 1;
 
 const zeros = (n: number) => Array.from({ length: n }, () => new Array(n).fill(0));
 
@@ -40,17 +51,33 @@ function predictState(tr: Track, t: number): { s: number[]; P: number[][] } {
   for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) for (let k = 0; k < 4; k++) FP[i][j] += F[i][k] * tr.P[k][j];
   const P = zeros(4);
   for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) for (let k = 0; k < 4; k++) P[i][j] += FP[i][k] * F[j][k];
-  const q = Q_ACC;
+  // Process noise, split along and across the whale's direction of travel (see Q_* below): heading wander pushes a
+  // whale sideways, speed changes push it along its path. Where the heading is still unknown, use the larger of the two.
+  const vx = tr.s[2], vy = tr.s[3];
+  const v = Math.hypot(vx, vy);
+  const kn = Math.max(v / 0.000514444, 1.5);
+  const qLat = Q_LAT * kn * kn;
+  const qAlong = Q_ALONG * Math.pow(kn, 0.85);
+  const vStd = Math.sqrt(Math.max(tr.P[2][2] + tr.P[3][3], 0) / 2);
+  let qxx: number, qxy: number, qyy: number;
+  if (v > 1e-6 && vStd < 0.5 * v) {
+    const ux = vx / v, uy = vy / v; // along-track unit vector; across = (-uy, ux)
+    qxx = qAlong * ux * ux + qLat * uy * uy;
+    qyy = qAlong * uy * uy + qLat * ux * ux;
+    qxy = (qAlong - qLat) * ux * uy;
+  } else {
+    qxx = qyy = Math.max(qLat, qAlong);
+    qxy = 0;
+  }
   const dt2 = dt * dt;
   const dt3 = dt2 * dt;
-  P[0][0] += (q * dt3) / 3;
-  P[1][1] += (q * dt3) / 3;
-  P[0][2] += (q * dt2) / 2;
-  P[2][0] += (q * dt2) / 2;
-  P[1][3] += (q * dt2) / 2;
-  P[3][1] += (q * dt2) / 2;
-  P[2][2] += q * dt;
-  P[3][3] += q * dt;
+  const Qc = [[qxx, qxy], [qxy, qyy]];
+  for (let i = 0; i < 2; i++) for (let j = 0; j < 2; j++) {
+    P[i][j] += (Qc[i][j] * dt3) / 3; // position
+    P[i][j + 2] += (Qc[i][j] * dt2) / 2; // position-velocity
+    P[i + 2][j] += (Qc[i][j] * dt2) / 2;
+    P[i + 2][j + 2] += Qc[i][j] * dt; // velocity
+  }
   return { s, P };
 }
 
@@ -75,15 +102,32 @@ export class Tracker {
   tracks: Track[] = [];
   private nextId = 1;
 
-  /** Assign a fix to the best track (or start a new one). Returns the updated track. */
-  addFix(fix: Fix, t: number): Track {
+  /** Assign a fix to the best track, or start a new one if `allowNew`. Returns the track (null if dropped). */
+  addFix(fix: Fix, t: number, allowNew = true, species?: SpeciesId): Track | null {
     let best: Track | null = null;
     let bestD = GATE;
+    const same = (tr: Track) => !species || !tr.species || tr.species === species; // never mix species
     for (const tr of this.tracks) {
+      if (!same(tr)) continue;
       const d = mahalanobis2(tr, fix, t);
       if (d < bestD) {
         bestD = d;
         best = tr;
+      }
+    }
+    // Outside every gate, but a recent track of the same species is within ~3 km: it's almost certainly the same
+    // whale that turned or sped up. Re-attach it (and loosen its velocity) instead of starting a duplicate track.
+    if (!best) {
+      let bestKm = REATTACH_KM;
+      for (const tr of this.tracks) {
+        if (!same(tr) || t - tr.lastUpdate > 15 * 60) continue;
+        const p = predictPosition(tr, t);
+        const km = Math.hypot(fix.x - p.x, fix.y - p.y);
+        if (km < bestKm) { bestKm = km; best = tr; }
+      }
+      if (best) {
+        best.P[2][2] += V0_VAR; best.P[3][3] += V0_VAR;
+        best.P[0][0] += bestKm * bestKm; best.P[1][1] += bestKm * bestKm;
       }
     }
     const R = [
@@ -91,6 +135,7 @@ export class Tracker {
       [fix.cov[1], Math.max(fix.cov[2], 1e-4)],
     ];
     if (!best) {
+      if (!allowNew) return null;
       const tr: Track = {
         id: this.nextId++,
         s: [fix.x, fix.y, 0, 0],
@@ -103,6 +148,7 @@ export class Tracker {
         t,
         lastUpdate: t,
         nFixes: 1,
+        species,
         history: [{ t, x: fix.x, y: fix.y }],
       };
       this.tracks.push(tr);
@@ -139,5 +185,16 @@ export class Tracker {
 
   prune(t: number): void {
     this.tracks = this.tracks.filter((tr) => t - tr.lastUpdate < TRACK_TIMEOUT_S);
+    // two tracks of the same species on top of each other are one whale: keep the one with more fixes
+    const drop = new Set<Track>();
+    for (const a of this.tracks) for (const b of this.tracks) {
+      if (a === b || drop.has(a) || drop.has(b) || a.species !== b.species || a.nFixes < b.nFixes) continue;
+      const pa = predictPosition(a, t), pb = predictPosition(b, t);
+      if (Math.hypot(pa.x - pb.x, pa.y - pb.y) < MERGE_KM) {
+        drop.add(b);
+        a.sightings = (a.sightings ?? 0) + (b.sightings ?? 0) || a.sightings;
+      }
+    }
+    if (drop.size) this.tracks = this.tracks.filter((tr) => !drop.has(tr));
   }
 }

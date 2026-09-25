@@ -8,14 +8,14 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
-    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='15' fill='%23061426'/%3E%3Cpath d='M6 18c4-6 12-7 20-3-3 0-5 1-6 3 1 1 3 2 5 2-5 3-13 3-19-2z' fill='%235fe1ff'/%3E%3C/svg%3E" />
+    <link rel="icon" type="image/svg+xml" href="./src/assets/logo-small.svg" />
   </head>
   <body>
     <div id="map"></div>
 
     <header class="topbar glass">
       <div class="brand">
-        <div class="logo" aria-hidden="true"></div>
+        <img class="logo" src="./src/assets/logo-small.svg" alt="" aria-hidden="true" />
         <div>
           <div class="brand-name">CETUS</div>
           <div class="brand-sub">Acoustic whale localization · strike-aware routing</div>
@@ -24,20 +24,25 @@
       <div class="voyage">
         <div class="voyage-row">
           <span id="routeName" class="route-name">Oakland → Long Beach</span>
-          <span id="modeChip" class="chip chip-net">Sensor network</span>
+          <span id="modeChip" class="chip chip-net">Ships as sensors</span>
           <span id="clock" class="mono clock">Day 1 · 06:00</span>
         </div>
-        <div class="progress"><div id="progressFill" class="progress-fill"></div><div id="progressMarks"></div><div id="progressShip" class="progress-ship"></div></div>
+        <div class="progress" id="progressBar" title="Click to replay any moment of the voyage"><div id="progressFill" class="progress-fill"></div><div id="progressMarks"></div><div id="decMarks"></div><div id="progressShip" class="progress-ship"></div></div>
       </div>
       <div class="ship-readout mono">
         <div><span class="k">SPEED</span><span id="rdSpeed">16.0 kn</span></div>
         <div><span class="k">HDG</span><span id="rdHeading">—</span></div>
         <div><span class="k">ETA</span><span id="rdEta">—</span></div>
+        <button type="button" class="ii" data-info="readout" aria-label="What is this?">i</button>
       </div>
+      <button id="btnLab" class="btn lab-btn" title="Compare all modes, run many voyages, and see the business case">
+        <svg viewBox="0 0 24 24"><path d="M4 19h16v2H4zM6 10h3v7H6zm5-4h3v11h-3zm5 7h3v4h-3z"/></svg>Fleet lab</button>
     </header>
 
     <aside id="panel" class="glass">
+      <div id="panelGrip" class="panel-grip" title="Drag to widen the panel · double-click to reset" aria-hidden="true"></div>
       <nav class="tabs" role="tablist">
+        <button class="tab" data-tab="story">Story</button>
         <button class="tab active" data-tab="decision">Decision</button>
         <button class="tab" data-tab="voyage">Voyage</button>
         <button class="tab" data-tab="method">Method</button>
@@ -45,6 +50,7 @@
       <section id="tab-decision" class="tabpane active"></section>
       <section id="tab-voyage" class="tabpane"></section>
       <section id="tab-method" class="tabpane"></section>
+      <section id="tab-story" class="tabpane"></section>
     </aside>
 
     <div id="dock" class="glass">
@@ -56,39 +62,37 @@
         <div class="seg" id="speedSeg" title="Simulation speed">
           <button data-speed="60">60×</button><button data-speed="300" class="on">300×</button><button data-speed="900">900×</button><button data-speed="1800">1800×</button>
         </div>
+        <button type="button" class="ii" data-info="speed" aria-label="What is this?">i</button>
         <button id="btnSkip" class="btn" title="Fast-forward to the next whale encounter"><svg viewBox="0 0 24 24"><path d="M4 6v12l8.5-6zM13 6v12l8.5-6z"/></svg>Next encounter</button>
         <button id="btnRestart" class="btn btn-icon" title="Restart this voyage"><svg viewBox="0 0 24 24"><path d="M12 5V2L7 6l5 4V7a5 5 0 1 1-5 5H5a7 7 0 1 0 7-7z"/></svg></button>
         <button id="btnNew" class="btn btn-icon" title="New random whales"><svg viewBox="0 0 24 24"><path d="M17 3l4 4-4 4V8h-2.6l-7.2 9H3v-2h3.3l7.2-9H17zM3 7h4.2l2.3 2.9-1.3 1.6L6.3 9H3zm11.5 7.1 1.3-1.6 1.2 1.5H17v-3l4 4-4 4v-3h-2.6z"/></svg></button>
       </div>
       <div class="dock-row">
         <div class="seg seg-wide" id="modeSeg" title="Monitoring system">
-          <button data-mode="network" class="on">Sensor network</button><button data-mode="single">Single buoys (today)</button>
+          <button data-mode="ships" class="on" title="Ships as sensors: every real ship (AIS) carries a towed hydrophone and a thermal camera - no buoys">Ships</button><button data-mode="mix" title="Mix: real ships (towed hydrophone + thermal camera) plus one quiet seafloor station off each major port">Mix</button><button data-mode="network" title="Buoy network: thousands of hydrophone buoys along the lanes">Buoys</button><button data-mode="single" title="Slow zones: what exists today - single buoys and blanket 10-knot zones">Slow zones</button>
         </div>
+        <button type="button" class="ii" data-info="mode" aria-label="What is this?">i</button>
         <select id="routeSel" class="sel" title="Route">
           <option value="oak-lb">Oakland → Long Beach</option>
           <option value="oak-asia">Oakland → Asia</option>
         </select>
       </div>
       <div class="dock-row sliders">
-        <label>Sensors <b id="sensVal">3,000</b><input id="sensRange" type="range" min="500" max="5000" step="250" value="3000" /></label>
-        <label>Timing error <b id="sigVal">20 ms</b><input id="sigRange" type="range" min="2" max="100" step="1" value="20" /></label>
+        <label><span>Sensors <b id="sensVal">3,000</b> <button type="button" class="ii" data-info="sensors" aria-label="What is this?">i</button></span><input id="sensRange" type="range" min="500" max="5000" step="250" value="3000" /></label>
+        <label><span>Whales <b id="whaleVal">8</b> <button type="button" class="ii" data-info="whales" aria-label="What is this?">i</button></span><input id="whaleRange" type="range" min="3" max="60" step="1" value="8" /></label>
+        <label><span>Timing error <b id="sigVal">20 ms</b> <button type="button" class="ii" data-info="timing" aria-label="What is this?">i</button></span><input id="sigRange" type="range" min="2" max="100" step="1" value="20" /></label>
       </div>
       <div class="dock-row toggles">
-        <label class="tog"><input id="togTruth" type="checkbox" checked /><span></span>True whales</label>
-        <label class="tog"><input id="togFollow" type="checkbox" checked /><span></span>Follow ship</label>
-        <label class="tog"><input id="togSensors" type="checkbox" checked /><span></span>Sensors</label>
-        <label class="tog"><input id="togCine" type="checkbox" checked /><span></span>Auto slow-mo</label>
+        <label class="tog"><input id="togTruth" type="checkbox" checked /><span></span>True whales <button type="button" class="ii" data-info="truth" aria-label="What is this?">i</button></label>
+        <label class="tog"><input id="togFollow" type="checkbox" checked /><span></span>Follow ship <button type="button" class="ii" data-info="follow" aria-label="What is this?">i</button></label>
+        <label class="tog"><input id="togSensors" type="checkbox" checked /><span></span>Sensors <button type="button" class="ii" data-info="sensorsToggle" aria-label="What is this?">i</button></label>
+        <label class="sel-inline" id="cautionWrap" hidden>Unlocated whale ahead <select id="cautionSel" class="sel sel-sm"><option value="slow">Slow down</option><option value="ask">Ask me</option><option value="ignore">Hold speed</option></select> <button type="button" class="ii" data-info="caution" aria-label="What is this?">i</button></label>
+        <label class="tog"><input id="togCine" type="checkbox" checked /><span></span>Auto slow-mo <button type="button" class="ii" data-info="cine" aria-label="What is this?">i</button></label>
       </div>
     </div>
 
-    <div id="legend" class="glass">
-      <div><i class="lg lg-sensor"></i>Hydrophone buoy</div>
-      <div><i class="lg lg-hear"></i>Buoys → located call</div>
-      <div><i class="lg lg-whale"></i>True whale (sim only)</div>
-      <div><i class="lg lg-est"></i>Located · 95% zone</div>
-      <div><i class="lg lg-plan"></i>Ship's plan</div>
-      <div class="lg-depth"><span>0</span><i></i><span>4,500 m</span></div>
-    </div>
+    <div id="legend" class="glass"></div>
+    <div id="modeCard" class="mode-pop glass" hidden><button type="button" class="mode-x" id="modeX" aria-label="Close">×</button><div id="modeCardBody"></div></div>
 
     <div id="bubble" class="bubble" hidden>
       <div class="bubble-head"><span class="dot"></span><span id="bubbleTitle">Cetus routing</span><span id="bubbleTime" class="mono"></span></div>
@@ -96,32 +100,79 @@
     </div>
 
     <div id="toasts"></div>
+    <div id="cautionCard" class="caution-card glass" hidden>
+      <div class="cc-eyebrow">Our towed hydrophone · position unknown</div>
+      <div class="cc-title" id="ccTitle">Whale heard ahead</div>
+      <p class="cc-body" id="ccBody"></p>
+      <div class="cc-actions"><button class="btn btn-primary" id="ccSlow">Slow to 13 kn</button><button class="btn" id="ccHold">Hold speed</button></div>
+    </div>
+    <div id="avoided" class="strike good" hidden>
+      <div class="strike-card">
+        <div class="strike-title" id="avoidedTitle">CLOSE CALL</div>
+        <div class="strike-sub" id="avoidedSub"></div>
+        <p class="strike-body" id="avoidedBody"></p>
+        <button class="btn btn-lg" id="avoidedOk">Continue</button>
+      </div>
+    </div>
+    <div id="strike" class="strike" hidden>
+      <div class="strike-card">
+        <div class="strike-title">WHALE STRUCK</div>
+        <div class="strike-sub" id="strikeSub"></div>
+        <p class="strike-body" id="strikeBody"></p>
+        <button class="btn btn-lg" id="strikeOk">Continue</button>
+      </div>
+    </div>
     <div id="hover" class="hover mono" hidden></div>
-    <div id="credits">Bathymetry: GMRT (LDEO), CC-BY 4.0 · Simulation — not real whales or ships · <a href="#" id="aboutLink">About</a></div>
+    <div id="credits">By Yanick Sanchez · Bathymetry: GMRT (LDEO), CC-BY 4.0 · Simulation: whales are simulated; ship traffic in Ships and Mix is real AIS (NOAA MarineCadastre, 14–15 Aug 2024) · <a href="#" id="aboutLink">About</a></div>
+
+    <div id="replayBar" class="replay-bar glass" hidden>
+      <span class="rp-tag">REPLAY</span>
+      <button id="rpPrev" class="btn btn-icon" title="Previous decision"><svg viewBox="0 0 24 24"><path d="M6 6h2v12H6zm3.5 6 8.5 6V6z"/></svg></button>
+      <button id="rpPlay" class="btn btn-icon" title="Play / pause replay"><svg id="rpIcoPlay" viewBox="0 0 24 24"><path d="M7 5v14l12-7z"/></svg><svg id="rpIcoPause" viewBox="0 0 24 24" hidden><path d="M7 5h4v14H7zM13 5h4v14h-4z"/></svg></button>
+      <button id="rpNext" class="btn btn-icon" title="Next decision"><svg viewBox="0 0 24 24"><path d="M16 6h2v12h-2zM6 18l8.5-6L6 6z"/></svg></button>
+      <input id="rpRange" type="range" min="0" max="0" value="0" />
+      <span id="rpTime" class="mono small">Day 1 · 06:00</span>
+      <button id="rpLive" class="btn">Back to live</button>
+    </div>
+
+    <div id="lab" class="lab" hidden>
+      <div class="lab-card glass">
+        <div class="lab-head">
+          <div><div class="eyebrow">Fleet lab</div><h2>Compare, repeat, and put a price on it</h2></div>
+          <nav id="labTabs" class="lab-tabs"><button data-lt="compare" class="on">Compare modes</button><button data-lt="batch">Many voyages</button><button data-lt="business">Business case</button></nav>
+          <button id="labClose" class="mode-x" aria-label="Close">×</button>
+        </div>
+        <div id="labBody" class="lab-body"></div>
+      </div>
+    </div>
 
     <div id="intro" class="modal">
       <div class="modal-card glass">
-        <div class="eyebrow">Act 3 · The solution (simulation)</div>
+        <img class="intro-logo" src="./src/assets/logo.svg" alt="Cetus: a whale drawn as a constellation" />
+        <div class="eyebrow">Cetus · whale-aware ship routing (simulation)</div>
         <h1>Hear the whale. Locate it. <span class="grad">Route around it.</span></h1>
-        <p class="lead">Ships strike whales because nobody knows exactly where the whales are. A single listening buoy can say
-          <em>“a whale is somewhere within 20–100 km”</em> — so today’s answer is a blanket slow zone. This simulation shows
-          what a <b>network of low-cost hydrophones</b> changes: every call is heard by several buoys, the whale is located from
-          the tiny differences in arrival time, and the ship makes a small, cheap, targeted change instead.</p>
-        <ol class="steps">
-          <li><b>Listen</b> — thousands of buoys along the Oakland → Long Beach lanes, through real strike hotspots.</li>
-          <li><b>Locate</b> — arrival-time differences (like GPS in reverse) give a position and an error ellipse.</li>
-          <li><b>Track</b> — a Kalman filter follows each whale and predicts where it will be when the ship arrives.</li>
-          <li><b>Decide</b> — a transparent engine compares slowing down, shifting course and today’s practice on strike risk,
-            noise, time, fuel, $ and CO₂ — every number traceable to a formula and a source.</li>
-        </ol>
-        <div class="acts">
-          <div class="act"><span>Act 1</span>The problem — real ships & whale detections (next)</div>
-          <div class="act"><span>Act 2</span>Proof — locating real whales with OOI seafloor sensors (next)</div>
-          <div class="act on"><span>Act 3</span>The solution — this simulation</div>
+        <p class="lead">Ships kill dozens of blue, humpback and fin whales off California every year, mostly because nobody knows
+          exactly where the whales are. Today's answer is to slow whole regions to 10 knots. Cetus simulates what changes
+          if each whale can be <b>located</b>, so a ship can make a small, targeted change instead.</p>
+        <div class="intro-modes">
+          <div><b>Ships</b><span>real ships as sensors</span></div>
+          <div><b>Mix</b><span>ships + port stations</span></div>
+          <div><b>Buoys</b><span>a dense hydrophone network</span></div>
+          <div><b>Slow zones</b><span>what exists today</span></div>
         </div>
+        <ol class="steps">
+          <li><b>Watch</b> a real shipping route, Oakland → Long Beach, through real strike hotspots.</li>
+          <li><b>See</b> each whale call heard, located and tracked, and every decision explained with its risk, cost, fuel and CO₂.</li>
+          <li><b>Choose</b> what the ship does when its own hydrophone hears a whale nobody has located (Ships/Mix): slow down, ask you, or hold speed.</li>
+          <li><b>Compare</b> the modes in the <b>Fleet lab</b>: the same whales in every mode, many voyages at once, and the business case. Click the progress bar to replay any moment.</li>
+        </ol>
+        <p class="small muted">New here? Open the <b>Story</b> tab for the background, and <b>Method</b> for how every number is computed.
+          Tap any <b>ⓘ</b> for a plain-English explanation.</p>
         <div class="modal-actions">
           <button id="btnStart" class="btn btn-primary btn-lg">Start the voyage</button>
-          <span class="muted small">Space = play/pause · drag to explore · all whales and ships are simulated</span>
+          <span class="muted small">Space = play/pause · drag to explore · whales are simulated; in Ships and Mix the ship traffic is real (AIS)</span>
+        </div>
+        <div class="byline small muted">Built by <b>Yanick Sanchez</b> · open source (MIT) · <a href="https://github.com/yanicksanchez14-creator/cetus" target="_blank" rel="noopener">code on GitHub</a>
         </div>
       </div>
     </div>

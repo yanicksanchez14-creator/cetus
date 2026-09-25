@@ -34,6 +34,14 @@ export class Whale {
   nCalls = 0;
   // ground truth bookkeeping (hindsight only)
   cpaKm = Infinity;
+  /** position at the start of the current step (for the strike check) */
+  prevX?: number;
+  prevY?: number;
+  /** closest approach to a ship that had simply held course and speed (hindsight benchmark) */
+  cpaHoldKm = Infinity;
+  /** Scripted "blind spot" singer (ships mode): crosses the lane on a fixed line, ~15 m deep, never surfaces. */
+  script?: { target: XY; dir: XY; speed: number; eta: number | null; sAt: number; locked?: boolean };
+  singer = false;
   cpaSpeed = 0;
   cpaT = 0;
 
@@ -65,6 +73,23 @@ export class Whale {
   /** Advance dt seconds. Returns true if the whale made a call during this step (time in `callTime`). */
   step(t: number, dt: number): number | null {
     if (!this.active(t)) return null;
+    if (this.script && this.script.eta !== null) {
+      // straight, steady crossing through the target point at the ship's expected arrival time
+      const k = t + dt - this.script.eta;
+      this.x = this.script.target[0] + this.script.dir[0] * this.script.speed * k;
+      this.y = this.script.target[1] + this.script.dir[1] * this.script.speed * k;
+      this.heading = Math.atan2(this.script.dir[1], this.script.dir[0]);
+      this.trail.push({ t, x: this.x, y: this.y });
+      if (this.trail.length > 360) this.trail.shift();
+      if (t + dt >= this.nextCall) {
+        const callTime = Math.max(this.nextCall, t);
+        const [a, b] = SPECIES[this.species].callIntervalS;
+        this.nextCall = callTime + this.rng.uniform(a, b);
+        this.nCalls++;
+        return callTime;
+      }
+      return null;
+    }
     const rng = this.rng;
     // heading drift (random turning), stronger pull toward the guide target if any
     this.heading += rng.gauss(0, 0.012 * Math.sqrt(dt));
@@ -72,11 +97,13 @@ export class Whale {
       const want = Math.atan2(this.guide.target[1] - this.y, this.guide.target[0] - this.x);
       let d = want - this.heading;
       d = Math.atan2(Math.sin(d), Math.cos(d));
-      this.heading += d * Math.min(1, 0.004 * dt);
+      // gentle homing (time constant ~30 min): the whale heads for its crossing point without sharp, unpredictable
+      // turns, so its path stays within the random wander the tracker's forecast allows for
+      this.heading += d * Math.min(1, 0.0006 * dt);
       const togo = Math.hypot(this.guide.target[0] - this.x, this.guide.target[1] - this.y);
       const timeLeft = Math.max(this.guide.until - t, 60);
       // adjust speed so the whale arrives around the planned time (bounded to realistic speeds)
-      const want_v = Math.min(Math.max(togo / timeLeft, 0.4 * this.meanSpeed), 1.8 * this.meanSpeed);
+      const want_v = Math.min(Math.max(togo / timeLeft, 0.5 * this.meanSpeed), 1.3 * this.meanSpeed);
       this.speed += (want_v - this.speed) * Math.min(1, 0.002 * dt);
     } else {
       // Ornstein-Uhlenbeck speed around the species' mean
@@ -99,8 +126,16 @@ export class Whale {
         }
       }
       if (!this.deepEnough(nx, ny)) {
-        nx = this.x;
-        ny = this.y;
+        // stuck on the shelf: swim toward whichever direction gets deeper fastest (whales do use shallow shelf water)
+        let best = -Infinity;
+        for (let k = 0; k < 12; k++) {
+          const h = (k / 12) * 2 * Math.PI;
+          const tx = this.x + Math.cos(h) * this.speed * dt, ty = this.y + Math.sin(h) * this.speed * dt;
+          const [lon, lat] = toLL(tx, ty);
+          const z = -this.depth.elevation(lon, lat);
+          if (z > best) { best = z; this.heading = h; nx = tx; ny = ty; }
+        }
+        if (best < 10) { nx = this.x; ny = this.y; }
       }
     }
     this.x = nx;

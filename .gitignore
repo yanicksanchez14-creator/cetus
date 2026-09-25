@@ -1,5 +1,7 @@
 node_modules/
 dist/
 data/raw/
+data/ais/
 *.log
 .DS_Store
+start-cetus.bat
