@@ -8,7 +8,7 @@ if steering can't make it safe. Every option shows its strike risk, noise, time,
 
 ![Cetus (Buoys mode) locating a fin whale and shifting the ship 1.5 km around it](docs/network.png)
 
-> **Live demo:** [yanicksanchez14-creator.github.io/cetus](https://yanicksanchez14-creator.github.io/cetus/) (see [Deploy](#deploy-free)). You can also open
+> **Live demo:** [yanicksanchez14-creator.github.io/cetus](https://yanicksanchez14-creator.github.io/cetus/) You can also open
 > `dist/index.html` straight from disk; it is one self-contained file that works offline.
 
 ---
@@ -102,13 +102,13 @@ whales the ship assessed, and the encounter areas are labelled on the bar.
 | Quantity | Value | Source |
 |---|---|---|
 | Speed of sound | 1.5 km/s (true value biased ±0.4%) | nominal seawater |
-| Spreading loss | 15·log₁₀ r | practical spreading |
+| Spreading loss | 15·log₁₀ r + absorption | practical spreading; Thorp absorption at each call's frequency |
 | Call source levels | humpback 165, fin 189, blue 189 dB re 1 µPa @ 1 m | Au et al. 2006; Širović et al. 2007 |
 | Ship source level | 186 dB @ 18 kn, +1.5 dB/kn | level: McKenna et al. 2012; slope: assumption (see [related work](#related-work)) |
 | Disturbance threshold | 120 dB re 1 µPa | NMFS Level B (continuous noise) |
 | Strike lethality | logistic in speed | Vanderlaan & Taggart 2007 |
 | Ship | 30 MW @ 18 kn (21 MW, ~96 t fuel/day incl. generators @ 16 kn), cube law; SFOC 175 g/kWh; 1.5 MW aux | illustrative ~14,000 TEU container ship |
-| Value of ship time | $4,200/h (~$100k/day) | assumption: charter + crew + running costs |
+| Value of ship time | $4,200/h (~$100k/day) | assumption: charter hire (incl. crew) + running costs |
 | Whale response to ships | none (whales don't reliably get out of the way) | cautious; blue whales show only a slow, shallow dive (McKenna et al. 2015) |
 | Fuel price | $1,346/t (average of MGO $1,664 and VLSFO $1,028) | Ship & Bunker, LA/Long Beach, 23–24 Sep 2026 |
 | CO₂ factor | 3.206 t CO₂/t fuel | IMO MEPC.364(79) |
@@ -148,8 +148,8 @@ would be better still. These ranges are estimates from the model's stated assump
 - **Acoustics are simplified:** no ray tracing, sound-speed profile, bathymetric shadowing or multipath. Real
   localization errors will be larger, especially near the coast.
 - **A 3,000-buoy network does not exist.** It is a design scenario. Moored hydrophones, power and data links
-  would cost far more to build and maintain than this model counts. The comparison is per voyage, not a full
-  cost-benefit of the network.
+  would cost far more to build and maintain than this model counts. The Fleet lab's business case gives rough
+  yearly costs, but its equipment prices are estimates.
 - **Species ID is assumed perfect** (it comes from the call type). Silent whales are invisible to any acoustic system.
 - **The strike model** uses a fixed hit width and a lethality curve fitted mainly to smaller vessels. Very large ships
   may be lethal at all speeds.
@@ -167,21 +167,14 @@ npm run build      # -> dist/index.html (one self-contained file, ~4 MB)
 The map assets in `src/assets/` are pre-built. To regenerate them from raw GMRT grids, put the `.asc` files in
 `data/raw/` and run `python tools/prepare_map.py` (needs `pip install numpy pandas pillow matplotlib scikit-image shapely`).
 
-## Deploy (free)
-
-1. Push this folder to a new GitHub repository named `cetus`.
-2. Go to **Settings → Pages → Source** and choose **GitHub Actions**.
-3. Every push to `main` builds and publishes to `https://yanicksanchez14-creator.github.io/cetus/`
-   (workflow: `.github/workflows/pages.yml`). To use a custom domain (~$12/yr), add it under Settings → Pages.
-
 ## Project structure
 
 ```
 src/engine/   physics.ts (acoustics, lethality, fuel) · localize.ts (TDOA) · tracker.ts (Kalman)
-              decision.ts (options, risk, cost) · sim.ts (voyage loop) · route.ts · whale.ts · sensors.ts
+              decision.ts (options, risk, cost) · sim.ts (voyage loop) · summary.ts · route.ts · whale.ts · traffic.ts · sensors.ts
 src/worker/   simulation runs in a Web Worker so the map stays smooth
-src/ui/       deck.gl map, decision panel, chat bubble, summary
-tools/        prepare_map.py (GMRT -> shaded relief, depth grids, contours)
+src/ui/       deck.gl map, decision panel, chat bubble, summary, replay · lab.ts (Fleet lab: compare, many voyages, business case)
+tools/        prepare_map.py (GMRT -> shaded relief, depth grids, contours) · fetch_traffic.py (AIS download)
 tests/        vitest suites
 ```
 
