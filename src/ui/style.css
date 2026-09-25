@@ -530,3 +530,10 @@ body.resizing { cursor: ew-resize; user-select: none; }
 #credits { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: calc(100vw - var(--pw) - 600px); }
 .byline { margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--line); }
 .byline b { color: var(--text); font-weight: 600; }
+
+/* Decision tab: new decision while reading Story/Method */
+.tab.new { color: var(--cyan); }
+.tab.new::after { content: ""; display: inline-block; vertical-align: middle; margin: -2px 0 0 6px; width: 6px; height: 6px; border-radius: 50%; background: var(--cyan); box-shadow: 0 0 6px var(--cyan); }
+/* Play button waiting for the first start */
+#btnPlay.ready { animation: playReady 1.6s ease-in-out infinite; }
+@keyframes playReady { 0%,100% { box-shadow: 0 0 0 0 rgba(127,240,255,0.55); } 50% { box-shadow: 0 0 0 7px rgba(127,240,255,0); } }

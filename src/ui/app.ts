@@ -368,8 +368,9 @@ export class App {
       this.toast(d.chosen.id === "policy" ? d.chosen.label : `${/slow|yield/.test(d.chosen.id) && d.chosen.id !== "turn2slow12" ? "Speed change" : "Route change"}: ${d.chosen.label}`, "dec");
       if (this.cine) this.speedBoostUntil = now + 9000;
       if (!this.follow) this.flyTo(this.snap?.ship.lon ?? this.view.longitude, this.snap?.ship.lat ?? this.view.latitude, Math.max(this.view.zoom, 8.2));
-      this.tab = "decision";
-      this.selectTab("decision");
+      // Don't pull the reader away from Story or Method: flag the Decision tab instead
+      if (this.tab === "story" || this.tab === "method") document.querySelector('.tab[data-tab="decision"]')?.classList.add("new");
+      else this.selectTab("decision");
     }
     renderDecision($("tab-decision"), d, this.history);
     this.renderedDecision = d;
@@ -904,8 +905,8 @@ export class App {
   }
 
   private syncReplay() {
-    $("rpIcoPlay").hidden = !!this.replay?.playing;
-    $("rpIcoPause").hidden = !this.replay?.playing;
+    $("rpIcoPlay").toggleAttribute("hidden", !!this.replay?.playing);
+    $("rpIcoPause").toggleAttribute("hidden", !this.replay?.playing);
   }
 
   private jumpDecision(dir: 1 | -1) {
@@ -1015,6 +1016,7 @@ export class App {
   // ------------------------------------------------------------------ UI wiring
   private selectTab(t: string) {
     this.tab = t;
+    if (t === "decision") document.querySelector('.tab[data-tab="decision"]')?.classList.remove("new");
     document.querySelectorAll(".tab").forEach((b) => b.classList.toggle("active", (b as HTMLElement).dataset.tab === t));
     document.querySelectorAll(".tabpane").forEach((p) => p.classList.toggle("active", p.id === `tab-${t}`));
     if (t === "voyage" && this.snap && this.init) renderVoyage($("tab-voyage"), this.snap, this.mode, this.init.sensors.lon.length, this.init.spacingKm, this.sigmaMs, this.init.traffic);
@@ -1035,8 +1037,12 @@ export class App {
   }
 
   private syncPlay() {
-    $("icoPlay").hidden = this.playing;
-    $("icoPause").hidden = !this.playing;
+    // SVG elements have no .hidden property: toggle the attribute itself
+    $("icoPlay").toggleAttribute("hidden", this.playing);
+    $("icoPause").toggleAttribute("hidden", !this.playing);
+    $("btnPlay").title = this.playing ? "Pause (space)" : "Play (space)";
+    // gentle pulse on Play until the first voyage starts
+    $("btnPlay").classList.toggle("ready", !this.playing && $("intro").hidden && !this.snap?.finished && !(this.snap && this.snap.t > 0));
   }
 
   /** Legend matching the current monitoring mode. */
@@ -1112,7 +1118,14 @@ export class App {
     wr.onchange = () => { this.whaleCount = Number(wr.value); this.restart(); };
     const cs = $<HTMLSelectElement>("cautionSel");
     cs.onchange = () => { this.caution = cs.value as "slow" | "ask" | "ignore"; if (this.mode === "ships" || this.mode === "mix") this.restart(); };
-    $("btnStart").onclick = () => this.play();
+    // Start from the intro: close it and get ready, but wait for the Play button
+    $("btnStart").onclick = () => {
+      if (!$("intro").hidden) this.showModeCard();
+      $("intro").hidden = true;
+      this.playing = false;
+      this.syncPlay();
+      if (this.follow && this.snap) this.flyTo(this.snap.ship.lon, this.snap.ship.lat - 0.05, 8.3, 2200);
+    };
     $("modeX").onclick = () => ($("modeCard").hidden = true);
     // drag the mode card by any part of it except its close button
     {
