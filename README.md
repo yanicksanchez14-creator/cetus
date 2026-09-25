@@ -157,6 +157,14 @@ would be better still. These ranges are estimates from the model's stated assump
 
 ## Run it locally
 
+You don't need any of this to use Cetus: just open the [live demo](https://yanicksanchez14-creator.github.io/cetus/).
+To run or change the code, install [Node.js](https://nodejs.org) (version 18 or newer), then in a terminal:
+
+```bash
+git clone https://github.com/yanicksanchez14-creator/cetus.git
+cd cetus
+```
+
 ```bash
 npm install
 npm run dev        # http://localhost:5173
