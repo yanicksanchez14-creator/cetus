@@ -89,7 +89,7 @@ const MODE_INFO: Record<"ships" | "mix" | "network" | "single", { title: string;
     title: "Mix: ships + 10 port stations",
     what: "Ships as sensors, plus one quiet cabled hydrophone on the seafloor off each major port, from Bodega Bay to Long Beach (like MBARI's MARS observatory off Monterey).",
     whatIf: "ports added ~10 seafloor stations, instead of thousands of buoys. They cover the busy approaches where ships and whales crowd together.",
-    watch: "Compare the blind spots and cost with Ships mode.",
+    watch: "Compare the blind spots and cost with Ships mode. Humpback calls carry only ~20 km, so offshore they are rarely heard by 3 listeners at once: humpbacks are mostly found by thermal cameras here. Fin and blue calls carry 50-100 km and get located.",
   },
   network: {
     title: "Buoy network",
@@ -273,9 +273,9 @@ export class App {
     if (this.callFx.length > 80) this.callFx.splice(0, this.callFx.length - 80);
     if (this.fixFx.length > 120) this.fixFx.splice(0, this.fixFx.length - 120);
     for (const tr of s.tracks) {
-      if (!this.seenTracks.has(tr.id) && tr.nFixes >= 3) {
+      if (!this.seenTracks.has(tr.id)) {
         this.seenTracks.add(tr.id);
-        this.toast(`${SPECIES[tr.species].name} located · ±${Math.max(10, Math.round(tr.now.a * 1000 / 2.45))} m · tracking`, "");
+        this.toast(`${SPECIES[tr.species].name} located · within ~${Math.max(10, Math.round(tr.now.a * 1000))} m (95%) · tracking`, "");
       }
     }
     for (const d of s.decisions) this.onDecision(d, now);
@@ -353,15 +353,17 @@ export class App {
     this.history.push(d);
     this.shownDecision = d;
     const sp = SPECIES[d.species].name;
+    // how far ahead, in km along the route (minutes alone read as "right here")
+    const aheadTxt = `~${Math.max(1, Math.round((d.aheadMin / 60) * (this.snap?.ship.speed ?? 16) * 1.852))} km (${Math.max(1, Math.round(d.aheadMin))} min) ahead`;
     if (d.chosen.id === "hold") {
       this.bubble = d.waitForInfo
-        ? { title: `${sp} tracked ~${Math.max(1, Math.round(d.aheadMin))} min ahead`, html: d.turnLater
+        ? { title: `${sp} tracked ${aheadTxt}`, html: d.turnLater
             ? d.turnLater.kind === "slow"
               ? `No need to slow yet: <span class="hl">${d.turnLater.v} kn</span> would do, starting in ~${Math.max(1, Math.round(d.turnLater.inMin))} min if still needed`
               : `No need to turn yet: a <span class="hl">${d.turnLater.km} km shift</span> would do, starting in ~${Math.max(1, Math.round(d.turnLater.inMin))} min if still needed`
             : `Too early to act: <span class="hl">keep listening</span> as the forecast sharpens`, policy: false, until: now + 6000 }
         : { title: "Whale ahead · clear", html: `${sp} near the lane — likely clear of our track. <span class="hl">Holding course.</span>`, policy: false, until: now + 6000 };
-      this.toast(d.waitForInfo ? `${sp} ~${Math.max(1, Math.round(d.aheadMin))} min ahead · no need to act yet` : `${sp} near the lane — clear, holding course`, "warn");
+      this.toast(d.waitForInfo ? `${sp} ${aheadTxt} · no need to act yet` : `${sp} near the lane — clear, holding course`, "warn");
     } else {
       this.bubble = this.maneuverBubble(d);
       this.spotlight = { d, t0: now };
@@ -736,7 +738,7 @@ export class App {
       }));
       layers.push(new TextLayer({
         id: "track-labels", data: this.view.zoom > 8.6 ? declutter(nearTracks, this.view.zoom) : [], getPosition: (tr: any) => [tr.lon, tr.lat],
-        getText: (tr: any) => `${SPECIES[tr.species as SpeciesId].name.replace(" whale", "").toUpperCase()} · ±${Math.max(10, Math.round((tr.now.a * 1000) / 2.45))} m · ${tr.speedKn.toFixed(1)} kn`,
+        getText: (tr: any) => `${SPECIES[tr.species as SpeciesId].name.replace(" whale", "").toUpperCase()} · ±${Math.max(10, Math.round(tr.now.a * 1000))} m · ${tr.speedKn.toFixed(1)} kn`,
         getSize: 10, getColor: [255, 215, 150, 235], fontFamily: "JetBrains Mono, monospace", fontWeight: 500, characterSet: "auto",
         getPixelOffset: [0, 16], outlineWidth: 3, outlineColor: [2, 9, 18, 230], fontSettings: { sdf: true, fontSize: 48, buffer: 10, radius: 10 },
       }));

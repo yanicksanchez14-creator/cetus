@@ -11,8 +11,8 @@ import {
 } from "./physics";
 import { Whale } from "./whale";
 import { networkSensors, singleBuoys, SensorIndex, spacingKm, type Sensor } from "./sensors";
-import { locate, type Fix } from "./localize";
-import { Tracker, predictPosition, type Track } from "./tracker";
+import { locateAll, type Fix } from "./localize";
+import { Tracker, predictPosition, isConfirmed, type Track } from "./tracker";
 import { decide, sameManeuver, narrowerShift, DEFAULT_PARAMS, type Belief, type Decision, type DecisionParams } from "./decision";
 import { SCENARIOS } from "./scenario";
 import { SHORE_STATIONS } from "./stations";
@@ -65,6 +65,11 @@ function clampSpeed(tr: Track, species: SpeciesId) {
   if (v > vmax) { tr.s[2] *= vmax / v; tr.s[3] *= vmax / v; }
 }
 
+/** Range within which a quiet listener hears a call with >99.8% certainty (8 dB over the threshold). */
+const SURE_RANGE: Partial<Record<SpeciesId, number>> = {};
+const sureRangeKm = (sp: (typeof SPECIES)[SpeciesId]) => (SURE_RANGE[sp.id] ??= nominalRangeKm(sp, 8));
+/** Relative error of the assumed speed of sound (the true one is drawn once per voyage). */
+const SOUND_SPEED_ERR = 0.004;
 export const SHIP_SENSOR_BASE = 1_000_000;
 export const CAUTION_KN = 13;
 /** Only slow for an unlocated whale whose call sounds closer than this (rough range from loudness). */
@@ -141,7 +146,7 @@ export class Simulation {
   zones = new Map<number, Zone>();
   fuelUsed = 0;
   finished = false;
-  stats = { calls: 0, detections: 0, fixes: 0, errSum: 0, sightings: 0 };
+  stats = { calls: 0, detections: 0, fixes: 0, errSum: 0, sightings: 0, ambiguous: 0 };
   /** ships mode: real ships (AIS replay) acting as sensors */
   readonly traffic: Traffic | null;
   shipsNow: ShipState[] = [];
@@ -151,6 +156,8 @@ export class Simulation {
   /** precautionary slow-down (heard, not located) */
   caution: { s1: number; since: number; startS: number } | null = null;
   pendingCaution: CautionPrompt | null = null;
+  /** last close call heard dead ahead by our own array (a precaution needs it heard twice) */
+  private aheadHear: { t: number; species: SpeciesId; rel: number } | null = null;
   private cautionCooldownUntil = -1;
   cautionStats = { count: 0, minutes: 0 };
   strikes: Strike[] = [];
@@ -166,7 +173,7 @@ export class Simulation {
     const def = ROUTES.find((r) => r.id === this.opts.routeId) ?? ROUTES[0];
     this.route = new Route(def);
     this.plan = { baseSpeed: this.opts.baseSpeed, zones: [], offset: null };
-    this.cTrue = SOUND_SPEED_KMS * (1 + this.rng.gauss(0, 0.004));
+    this.cTrue = SOUND_SPEED_KMS * (1 + this.rng.gauss(0, SOUND_SPEED_ERR));
     const scen = SCENARIOS[def.id];
     this.traffic = usesShips(this.opts.mode) ? traffic : null;
     if (usesShips(this.opts.mode) && !this.traffic) throw new Error("Ships mode needs traffic data");
@@ -467,20 +474,68 @@ export class Simulation {
     if (this.opts.mode !== "single") {
       if (detected.length >= 3) {
         const top = detected.slice(0, 12).map((d) => ({ pos: d.sensor.pos, t: d.t, snr: d.snr }));
-        const fix = locate(top, SOUND_SPEED_KMS, this.opts.sigmaT * TIMING_FACTOR[w.species]);
-        // sanity gates: a whale can't be on land; a very uncertain fix may refine a track but not start one
-        const sig = Math.sqrt(Math.max(fix.cov[0], fix.cov[2]));
-        const [flon, flat] = toLL(fix.x, fix.y);
-        // Consistency checks that a real system can do too (it knows where its sensors are):
-        // - every sensor that heard the call must be within hearing range of the fix (with margin)
-        // - the arrival times must fit well (a wrong "mirror" solution leaves large residuals)
-        // - 3 sensors give an exact but possibly wrong solution (no redundancy): they may refine a track, never start one
+        // Consistency checks that a real system can do too (it knows where its sensors are and what they heard):
+        // - every sensor that heard the call must be within hearing range of the answer (with margin)
+        // - the arrival times must fit well, and a whale can't be on land
+        // - 3 sensors give an exact but possibly wrong answer (no redundancy): they may refine a track, never start one
+        const sigT = this.opts.sigmaT * TIMING_FACTOR[w.species];
         const maxR = nominalRangeKm(sp) * 1.5;
-        const inRange = top.every((d) => Math.hypot(fix.x - d.pos[0], fix.y - d.pos[1]) < maxR);
-        const fitOk = fix.rmsResidualS < 5 * this.opts.sigmaT * TIMING_FACTOR[w.species] + 0.002;
-        const plausible = fix.ok && sig < 3 && inRange && fitOk && this.depth.elevation(flon, flat) < -10;
-        const tr = plausible ? this.tracker.addFix(fix, tCall, sig < 1.5 && top.length >= 4, w.species) : null;
-        if (tr) {
+        // - silence is information too: if a listener that would certainly have heard a whale at that spot heard
+        //   nothing, the whale isn't there (this is what rules out most "mirror" answers)
+        const heardIds = new Set(detected.map((d) => d.sensor.id));
+        const rSure = sureRangeKm(sp); // beyond this even a quiet listener might miss it
+        const silentAt = (f: Fix) => {
+          const p: XY = [f.x, f.y];
+          const cands: { s: Sensor; self: number }[] = [
+            ...(usesShips(this.opts.mode) ? this.shipSensors().map((q) => ({ s: q.s, self: selfNoiseDb(sp, q.v) })) : []),
+            ...this.index.within(p, rSure).map((b) => ({ s: b, self: -Infinity })),
+          ];
+          for (const { s, self } of cands) {
+            if (heardIds.has(s.id)) continue;
+            const r = Math.hypot(s.pos[0] - p[0], s.pos[1] - p[1]);
+            if (r > rSure) continue;
+            const dShip = Math.hypot(s.pos[0] - ship[0], s.pos[1] - ship[1]);
+            const shipRl = s.id === OWN_SHIP_SENSOR ? -Infinity : shipSL - shipNoiseTL(dShip);
+            const nl = 10 * Math.log10(10 ** (sp.bandNoise / 10) + 10 ** (shipRl / 10) + 10 ** (self / 10));
+            if (sp.sourceLevel - transmissionLoss(Math.max(r, 0.05), sp.id) - nl < DETECTION_THRESHOLD_DB + 8) continue;
+            if (r > 2 && this.landBetween(p, s.pos, r)) continue;
+            return true; // it would have heard it (>99.8%) - and didn't
+          }
+          return false;
+        };
+        // The locator assumes a nominal speed of sound; the real one differs by ~0.4% (temperature, depth), which
+        // shifts every travel time by ~0.4% of the range. Far listeners (blue/fin calls carry 50-100 km) make that
+        // bigger than the clock error, so it goes into each answer's error ellipse (model error, not just noise).
+        const withModelError = (f: Fix): Fix => {
+          const rMean = top.reduce((x, d) => x + Math.hypot(f.x - d.pos[0], f.y - d.pos[1]), 0) / top.length;
+          const k2 = 1 + (SOUND_SPEED_ERR * rMean / SOUND_SPEED_KMS) ** 2 / (sigT * sigT);
+          return { ...f, cov: [f.cov[0] * k2, f.cov[1] * k2, f.cov[2] * k2] };
+        };
+        // an answer "fits" if the arrival times match about as well as the best answer's (chi² within ~9) and it
+        // passes the physical checks; it's usable if it is also precise (error ellipse under ~3 km)
+        const consistent = (f: Fix) => {
+          const [flon, flat] = toLL(f.x, f.y);
+          return f.ok && top.every((d) => Math.hypot(f.x - d.pos[0], f.y - d.pos[1]) < maxR)
+            && f.rmsResidualS < 5 * sigT + 0.002 && this.depth.elevation(flon, flat) < -10 && !silentAt(f);
+        };
+        const all = locateAll(top, SOUND_SPEED_KMS, sigT).map(withModelError).filter(consistent);
+        const chi2 = (f: Fix) => (top.length * f.rmsResidualS ** 2) / (sigT * sigT);
+        const fits = all.filter((f) => chi2(f) - chi2(all[0]) < 9);
+        const precise = (f: Fix) => Math.sqrt(Math.max(f.cov[0], f.cov[2])) < 3;
+        let fix: Fix | null = fits.length === 1 && precise(fits[0]) ? fits[0] : null;
+        let allowNew = !!fix && Math.sqrt(Math.max(fix.cov[0], fix.cov[2])) < 1.5 && top.length >= 4;
+        const ambiguous = fits.length > 1;
+        if (ambiguous) {
+          // Two or more places explain the arrival times (typically the true spot and its mirror across a line of
+          // listeners). Never start a whale from it; use it only if exactly one precise answer matches a whale we
+          // already track, and no other answer does.
+          allowNew = false;
+          const ok = fits.filter((f) => precise(f) && this.tracker.bestGate(f, tCall, w.species) < Tracker.GATE);
+          fix = ok.length === 1 ? ok[0] : null;
+          this.stats.ambiguous++;
+        }
+        const tr = fix ? this.tracker.addFix(fix, tCall, allowNew, w.species, !ambiguous && top.length >= 4) : null;
+        if (tr && fix) {
           (tr as Track & { species?: SpeciesId }).species = w.species; // species comes from the call type (frequency)
           clampSpeed(tr, w.species);
           ev.fix = fix;
@@ -587,7 +642,7 @@ export class Simulation {
     if (Math.abs(rel) > 30) return; // not (nearly) dead ahead
     // is it already located? (a usable track ahead within ~8 km) -> the decision engine handles it
     for (const tr of this.tracker.tracks) {
-      if ((tr.nFixes < 3 && !tr.sightings) || this.t - tr.lastUpdate > 10 * 60) continue;
+      if (!isConfirmed(tr) || this.t - tr.lastUpdate > 10 * 60) continue;
       const p = predictPosition(tr, this.t);
       if (Math.hypot(p.x - own[0], p.y - own[1]) < 8) return;
     }
@@ -599,6 +654,11 @@ export class Simulation {
     const rlEst = sp.sourceLevel - transmissionLoss(dTrue, sp.id) + this.rng.gauss(0, 3);
     const rEst = Math.pow(10, (sp.sourceLevel - rlEst) / 15) / 1000;
     if (rEst > CAUTION_TRIGGER_KM) return; // sounds far away: keep listening
+    // one call is not enough to slow a 366 m ship: wait until the same kind of call is heard again from about the
+    // same direction within 10 minutes (whales call every few minutes; a stray reflection or distant call doesn't repeat)
+    const prev = this.aheadHear;
+    this.aheadHear = { t: this.t, species: sp.id, rel };
+    if (!this.caution && !(prev && prev.species === sp.id && this.t - prev.t < 10 * 60 && Math.abs(prev.rel - rel) < 12)) return;
     const maxRangeKm = Math.min(2 * rEst, 6);
     const s1 = Math.min(this.s + maxRangeKm + 0.5, this.route.length - 1);
     // a precaution covers at most ~6 km; hearing the whale again doesn't keep extending it
@@ -729,7 +789,7 @@ export class Simulation {
     if (this.opts.mode !== "single") {
       for (const tr of [...this.tracker.tracks].sort((a, b) => b.nFixes - a.nFixes)) {
         // 3+ acoustic fixes, or a thermal-camera sighting (a direct observation) is enough to act on
-        if ((tr.nFixes < 3 && !tr.sightings) || this.t - tr.lastUpdate > 20 * 60) continue;
+        if (!isConfirmed(tr) || this.t - tr.lastUpdate > 20 * 60) continue;
         const p = predictPosition(tr, this.t);
         const sp = (tr as Track & { species?: SpeciesId }).species ?? "humpback";
         // a duplicate track of the same whale (same species within ~2 km, fewer fixes) would double-count the risk

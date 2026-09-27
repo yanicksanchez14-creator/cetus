@@ -16,6 +16,8 @@ export interface Track {
   lastUpdate: number;
   nFixes: number;
   sightings?: number; // thermal-camera sightings (direct observations)
+  /** fixes from 4+ listeners with a single clear answer (3-listener or ambiguous fixes can refine, not confirm) */
+  nStrong?: number;
   /** species, from the call type (frequency band); a track only ever takes fixes of its own species */
   species?: SpeciesId;
   history: { t: number; x: number; y: number }[];
@@ -34,6 +36,12 @@ export const TRACK_TIMEOUT_S = 40 * 60;
 const REATTACH_KM = 3;
 /** Same-species tracks closer than this are merged (one whale seen twice). */
 const MERGE_KM = 1;
+/** ...or closer than this and within each other's uncertainty (Mahalanobis² below MERGE_GATE). */
+const MERGE_MAX_KM = 3;
+const MERGE_GATE = 6;
+
+/** Fastest sustained whale speed (~9 kn, fin whales), km/s. */
+const MAX_SPEED_KMS = 9 * 0.000514444;
 
 const zeros = (n: number) => Array.from({ length: n }, () => new Array(n).fill(0));
 
@@ -102,13 +110,32 @@ export class Tracker {
   tracks: Track[] = [];
   private nextId = 1;
 
+  /** Smallest statistical distance from a fix to a live track of the same species (Infinity if none). */
+  bestGate(fix: Fix, t: number, species?: SpeciesId): number {
+    let best = Infinity;
+    for (const tr of this.tracks) {
+      if (species && tr.species && tr.species !== species) continue;
+      best = Math.min(best, mahalanobis2(tr, fix, t));
+    }
+    return best;
+  }
+  static readonly GATE = GATE;
+
   /** Assign a fix to the best track, or start a new one if `allowNew`. Returns the track (null if dropped). */
-  addFix(fix: Fix, t: number, allowNew = true, species?: SpeciesId): Track | null {
+  addFix(fix: Fix, t: number, allowNew = true, species?: SpeciesId, strong = false): Track | null {
     let best: Track | null = null;
     let bestD = GATE;
     const same = (tr: Track) => !species || !tr.species || tr.species === species; // never mix species
+    // a whale can't have gone further than its top speed allows since it was last heard (plus both position errors):
+    // this stops a track with a ballooning forecast from swallowing far-off fixes of other whales
+    const fixSd = Math.sqrt(Math.max(fix.cov[0] + fix.cov[2], 0));
+    const reachable = (tr: Track) => {
+      const p = predictPosition(tr, tr.lastUpdate);
+      const lastSd = Math.sqrt(Math.max(p.cov[0] + p.cov[2], 0));
+      return Math.hypot(fix.x - tr.s[0], fix.y - tr.s[1]) < 1 + MAX_SPEED_KMS * Math.max(0, t - tr.lastUpdate) + 2 * (fixSd + lastSd);
+    };
     for (const tr of this.tracks) {
-      if (!same(tr)) continue;
+      if (!same(tr) || !reachable(tr)) continue;
       const d = mahalanobis2(tr, fix, t);
       if (d < bestD) {
         bestD = d;
@@ -120,7 +147,7 @@ export class Tracker {
     if (!best) {
       let bestKm = REATTACH_KM;
       for (const tr of this.tracks) {
-        if (!same(tr) || t - tr.lastUpdate > 15 * 60) continue;
+        if (!same(tr) || t - tr.lastUpdate > 15 * 60 || !reachable(tr)) continue;
         const p = predictPosition(tr, t);
         const km = Math.hypot(fix.x - p.x, fix.y - p.y);
         if (km < bestKm) { bestKm = km; best = tr; }
@@ -148,6 +175,7 @@ export class Tracker {
         t,
         lastUpdate: t,
         nFixes: 1,
+        nStrong: strong ? 1 : 0,
         species,
         history: [{ t, x: fix.x, y: fix.y }],
       };
@@ -178,6 +206,7 @@ export class Tracker {
     best.t = t;
     best.lastUpdate = t;
     best.nFixes++;
+    if (strong) best.nStrong = (best.nStrong ?? 0) + 1;
     best.history.push({ t, x: fix.x, y: fix.y });
     if (best.history.length > 400) best.history.shift();
     return best;
@@ -190,11 +219,22 @@ export class Tracker {
     for (const a of this.tracks) for (const b of this.tracks) {
       if (a === b || drop.has(a) || drop.has(b) || a.species !== b.species || a.nFixes < b.nFixes) continue;
       const pa = predictPosition(a, t), pb = predictPosition(b, t);
-      if (Math.hypot(pa.x - pb.x, pa.y - pb.y) < MERGE_KM) {
+      const dx = pa.x - pb.x, dy = pa.y - pb.y, km = Math.hypot(dx, dy);
+      // statistically the same place (within both uncertainties), and not far apart: one whale
+      const sxx = pa.cov[0] + pb.cov[0], sxy = pa.cov[1] + pb.cov[1], syy = pa.cov[2] + pb.cov[2];
+      const m2 = (syy * dx * dx - 2 * sxy * dx * dy + sxx * dy * dy) / (sxx * syy - sxy * sxy);
+      if (km < MERGE_KM || (km < MERGE_MAX_KM && m2 < MERGE_GATE)) {
         drop.add(b);
         a.sightings = (a.sightings ?? 0) + (b.sightings ?? 0) || a.sightings;
+        a.nStrong = (a.nStrong ?? 0) + (b.nStrong ?? 0);
       }
     }
     if (drop.size) this.tracks = this.tracks.filter((tr) => !drop.has(tr));
   }
+}
+
+/** A whale worth showing and acting on: 3+ located calls of which 2+ were clear (4+ listeners, one answer),
+ *  or a thermal-camera sighting. One lucky or mirrored fix can't create a whale on its own. */
+export function isConfirmed(tr: Track): boolean {
+  return (tr.nFixes >= 3 && (tr.nStrong ?? 0) >= 2) || !!tr.sightings;
 }

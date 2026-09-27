@@ -63,9 +63,9 @@ export function detectionProbability(snr: number): number {
 }
 
 /** Nominal detection range (km) for a species with no ship nearby. */
-export function nominalRangeKm(sp: Species): number {
+export function nominalRangeKm(sp: Species, marginDb = 0): number {
   // solve SL - TL(r) - NL = threshold (TL includes absorption, so no closed form): bisection on r
-  const excess = (r: number) => sp.sourceLevel - transmissionLoss(r, sp.id) - sp.bandNoise - DETECTION_THRESHOLD_DB;
+  const excess = (r: number) => sp.sourceLevel - transmissionLoss(r, sp.id) - sp.bandNoise - DETECTION_THRESHOLD_DB - marginDb;
   let lo = 0.01, hi = 1000;
   for (let i = 0; i < 60; i++) { const m = Math.sqrt(lo * hi); if (excess(m) > 0) lo = m; else hi = m; }
   return lo;

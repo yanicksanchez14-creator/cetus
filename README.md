@@ -59,7 +59,7 @@ that ignored them. These are **simulation outputs under the stated assumptions**
 2. **Locate.** Time-difference-of-arrival (TDOA) multilateration on the 12 loudest detections (Gauss-Newton/Levenberg-
    Marquardt) gives a position and a 95% error ellipse. Timing error (20 ms default) and an unknown ±0.4% sound-speed bias
    are simulated. Fixes are rejected if they land on land, are too uncertain, fit badly, or lie beyond a listener's range;
-   3-listener fixes can refine a track but never start one.
+   with few listeners or listeners in a line, the solver tries many start points, drops answers where a nearby listener heard nothing, and never starts a whale from an ambiguous or 3-listener fix. A whale is shown once it has 3+ fixes, 2 of them clear.
 3. **Track.** A constant-velocity Kalman filter per whale (species-aware; duplicates merged) predicts its position with
    uncertainty; the map shows 15 and 30 minutes ahead. Process noise is split sideways (heading wander) and along the path
    (speed changes), each calibrated against the whale model to within \~10% (`tests/forecast.test.ts`).

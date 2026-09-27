@@ -53,22 +53,64 @@ function invert3(A: number[][]): number[][] | null {
  * @param sigmaT timing error standard deviation, s (sets the size of the error ellipse)
  */
 export function locate(arrivals: Arrival[], c: number, sigmaT: number): Fix {
+  return locateAll(arrivals, c, sigmaT)[0];
+}
+
+/**
+ * All distinct solutions that explain the arrival times, best fit first.
+ * With few listeners, or listeners nearly in a line (ships in one shipping lane, stations along one coast), the
+ * arrival times can fit two places equally well: the true one and its "mirror" across the line of listeners.
+ * A single start point can land on either, so we start the solver from many points and keep every distinct answer;
+ * the caller decides what to do when more than one fits (a real system has exactly the same information).
+ */
+export function locateAll(arrivals: Arrival[], c: number, sigmaT: number): Fix[] {
   const n = arrivals.length;
   const bad: Fix = { x: 0, y: 0, t0: 0, cov: [1e6, 0, 1e6], rmsResidualS: Infinity, nSensors: n, ok: false };
-  if (n < 3) return bad;
-  // start: SNR-weighted centroid, earliest arrival minus a guess of travel time
-  let wsum = 0;
-  let x = 0;
-  let y = 0;
+  if (n < 3) return [bad];
+  // start points: SNR-weighted centroid, then rings around it (and around the loudest listener)
+  let wsum = 0, cx = 0, cy = 0;
   for (const a of arrivals) {
     const w = Math.max(a.snr, 1);
-    x += w * a.pos[0];
-    y += w * a.pos[1];
+    cx += w * a.pos[0];
+    cy += w * a.pos[1];
     wsum += w;
   }
-  x /= wsum;
-  y /= wsum;
-  let t0 = Math.min(...arrivals.map((a) => a.t)) - 2;
+  cx /= wsum;
+  cy /= wsum;
+  // Many listeners spread in two directions leave no mirror: one start is enough (the dense buoy network).
+  // Few listeners, or listeners nearly on one line, can: try many starts.
+  let sxx = 0, sxy = 0, syy = 0;
+  for (const a of arrivals) { const dx = a.pos[0] - cx, dy = a.pos[1] - cy; sxx += dx * dx; sxy += dx * dy; syy += dy * dy; }
+  const tr2 = (sxx + syy) / n, det = (sxx * syy - sxy * sxy) / (n * n);
+  const minorSd = Math.sqrt(Math.max(tr2 / 2 - Math.sqrt(Math.max(tr2 * tr2 / 4 - det, 0)), 0)); // spread across the "line"
+  if (n >= 6 && minorSd > 2) {
+    const f = solveFrom(arrivals, c, sigmaT, cx, cy);
+    if (f.ok) return [f];
+  }
+  const loud = arrivals.reduce((m, a) => (a.snr > m.snr ? a : m), arrivals[0]).pos;
+  const starts: XY[] = [[cx, cy]];
+  for (const [ox, oy] of [[cx, cy], loud] as XY[])
+    for (const R of [6, 20, 50])
+      for (let k = 0; k < 8; k++) starts.push([ox + R * Math.cos((k * Math.PI) / 4 + R), oy + R * Math.sin((k * Math.PI) / 4 + R)]);
+  const sols: Fix[] = [];
+  for (const [sx, sy] of starts) {
+    const f = solveFrom(arrivals, c, sigmaT, sx, sy);
+    if (!f.ok) continue;
+    const same = sols.find((q) => Math.hypot(q.x - f.x, q.y - f.y) < 0.5);
+    if (same) { if (f.rmsResidualS < same.rmsResidualS) Object.assign(same, f); continue; }
+    sols.push(f);
+  }
+  if (!sols.length) return [bad];
+  sols.sort((a, b) => a.rmsResidualS - b.rmsResidualS);
+  return sols;
+}
+
+function solveFrom(arrivals: Arrival[], c: number, sigmaT: number, x: number, y: number): Fix {
+  const n = arrivals.length;
+  const bad: Fix = { x: 0, y: 0, t0: 0, cov: [1e6, 0, 1e6], rmsResidualS: Infinity, nSensors: n, ok: false };
+  // t0 guess: earliest arrival minus the travel time from the start point to that listener
+  const first = arrivals.reduce((m, a) => (a.t < m.t ? a : m), arrivals[0]);
+  let t0 = first.t - Math.hypot(x - first.pos[0], y - first.pos[1]) / c;
   let lambda = 1e-3;
   const cost = (px: number, py: number, pt: number) =>
     arrivals.reduce((s, a) => {

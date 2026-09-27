@@ -268,16 +268,20 @@ export function renderMethod(el: HTMLElement) {
       <p>A call reaches each listener at a slightly different time. Solving <code>tᵢ = t₀ + |p − sᵢ| / c</code> for the position <code>p</code> and
         call time <code>t₀</code> (least squares, 12 best listeners) gives a position and a 95% error ellipse. Needs <b>3+ listeners</b>. The speed of sound
         is only roughly known and every arrival time has a random error; both are simulated.</p>
-      <p class="callout">A fix is thrown out if it lands on land, is too uncertain (&gt; ~3 km), fits the arrival times badly, or lies beyond the hearing range of a
-        listener that heard it. With only 3 listeners the math can land on a wrong "mirror" position, so those fixes may refine a known whale but never create one.</p>`)}
+      <p>The error ellipse also includes the sound-speed error, which grows with distance: blue and fin calls heard 50–100 km away are placed less precisely.</p>
+      <p class="callout">With few listeners, or listeners nearly in a line (ships in one lane, stations along one coast), the times can fit <b>two</b> places:
+        the real one and its <b>mirror</b>. So the solver starts from many points and keeps every answer that fits. An answer is thrown out if it lands on land,
+        lies beyond the hearing range of a listener that heard it, or sits where a nearby listener would certainly have heard the call but heard nothing.
+        If two answers still fit, the call can refine a whale already tracked there, but never create a new one; the same goes for 3-listener fixes.</p>`)}
 
     ${acc("3", "Track", "One whale, one forecast", `
       <p>A Kalman filter per whale combines fixes, estimates speed and heading (never faster than the species can swim) and predicts where the whale
         will be. The forecast's uncertainty has a shape: <b>sideways</b> it grows with how much a whale's heading wanders, <b>along its path</b> with how
         much its speed changes. Both are calibrated against the whale model to within ~10%: after an hour a 2-knot whale can be ~1.4 km off sideways
         and ~1.8 km along its path; a 6-knot whale ~4 km sideways and ~3 km along.</p>
-      <p>A track only takes calls of its own species, and two tracks on top of each other are merged, so one whale shows as one whale. One thermal-camera
-        sighting is enough to act on.</p>`)}
+      <p>A track only takes calls of its own species and only calls the whale could have reached at its top speed. Two tracks that sit within each
+        other's uncertainty are merged, so one whale shows as one whale. A whale is shown and acted on once it has <b>3+ located calls, 2 of them clear</b>
+        (4+ listeners, one answer), or one thermal-camera sighting.</p>`)}
 
     ${acc("4", "Decide", "Steer first; slow only when steering can't", `
       <p>For every option the engine finds where the ship passes closest to each whale's forecast position. The miss distance there is uncertain
@@ -297,7 +301,7 @@ export function renderMethod(el: HTMLElement) {
         <tr><td><b>Slow to 12 / 10 kn</b><br><span class="muted">fallback</span></td><td>Through the conflict zone only.</td></tr>
         <tr><td><b>Shift 2 km + 12 kn</b></td><td>Both at once (fallback).</td></tr>
         <tr><td><b>Precaution (13 kn)</b><br><span class="muted">Ships/Mix</span></td><td>Our own towed array hears an unlocated whale nearly dead ahead (±30°) and close
-          (≤ ~3 km, from loudness). Slow to 13 kn for at most ~6.5 km, then a 10-min pause. Your setting: slow, ask, or hold.</td></tr>
+          (≤ ~3 km, from loudness), heard twice from the same direction within 10 min. Slow to 13 kn for at most ~6.5 km, then a 10-min pause. Your setting: slow, ask, or hold.</td></tr>
         <tr><td><b>Slow zone</b></td><td>Blanket 10 kn in a zone ~28 km (~15 nm, an app assumption) around a detection: shown for comparison, used in Slow zones mode.</td></tr>
       </table>
       <p class="small">Mid-manoeuvre, the ship only changes plan for a clear reason (unsafe, or much cheaper), and a new plan starts from where the ship is.</p>`)}

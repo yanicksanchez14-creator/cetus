@@ -3,7 +3,7 @@
 import { DepthModel } from "../engine/bathy";
 import { Simulation, type CallEvent } from "../engine/sim";
 import type { Decision } from "../engine/decision";
-import { predictPosition, type Track } from "../engine/tracker";
+import { predictPosition, isConfirmed, type Track } from "../engine/tracker";
 import { ellipse } from "../engine/localize";
 import { toLL, toXY, KNOT_KMS } from "../engine/geo";
 import { nominalRangeKm, SPECIES, type SpeciesId } from "../engine/physics";
@@ -55,17 +55,16 @@ function snapshot(): Snapshot {
     for (let q = z[0]; q <= z[1]; q += 0.5) maneuverZone.push(toLL(...s.route.at(q).p));
   }
   // one marker per whale: if two tracks of the same species sit within ~2 km, show only the better one
+  // (only whales the engine would act on: confirmed, heard/seen in the last 20 min; older forecasts just drift and
+  // balloon - the engine ignores them too. Filter first, so a stale track can't hide a fresh one.)
   const kept: Track[] = [];
-  for (const tr of [...s.tracker.tracks].sort((a, b) => b.nFixes - a.nFixes)) {
+  for (const tr of [...s.tracker.tracks].filter((tr) => isConfirmed(tr) && s.t - tr.lastUpdate <= 20 * 60).sort((a, b) => b.nFixes - a.nFixes)) {
     const p = predictPosition(tr, s.t);
     const sp = (tr as Track & { species?: SpeciesId }).species;
     if (kept.some((k) => (k as Track & { species?: SpeciesId }).species === sp && (() => { const q = predictPosition(k, s.t); return Math.hypot(q.x - p.x, q.y - p.y) < 2; })())) continue;
     kept.push(tr);
   }
   const tracks: SnapTrack[] = kept
-    // show only whales the engine would act on: 3+ fixes or a camera sighting, heard/seen in the last 20 min
-    // (older forecasts just drift and balloon - the engine ignores them too)
-    .filter((tr) => (tr.nFixes >= 3 || !!tr.sightings) && s.t - tr.lastUpdate <= 20 * 60)
     .map((tr: Track & { species?: SpeciesId }) => {
       const p = predictPosition(tr, s.t);
       const [tlon, tlat] = toLL(p.x, p.y);
