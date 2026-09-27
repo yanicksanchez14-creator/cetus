@@ -252,7 +252,9 @@ input[type="range"] { width: 100%; accent-color: var(--cyan); height: 16px; }
   .modal-card { padding: 20px 18px 18px; max-height: 88vh; }
   .modal h1 { font-size: 23px; }
   .lead { font-size: 13px; }
-  .modal-actions { position: sticky; bottom: -18px; margin: 0 -18px -18px; padding: 12px 18px 16px; background: linear-gradient(to bottom, rgba(8, 19, 31, 0.6), #08131f 35%); }
+  .modal-actions { position: sticky; bottom: -18px; z-index: 2; margin: 12px -18px -18px; padding: 12px 18px 16px; background: #08131f; border-top: 1px solid var(--line); box-shadow: 0 -12px 18px #08131f; }
+  .modal-actions .btn-lg { width: 100%; justify-content: center; }
+  .modal-actions > .muted { display: none; } /* keyboard hints don't apply on a phone */
 }
 
 /* ---------- ⓘ info buttons ---------- */
