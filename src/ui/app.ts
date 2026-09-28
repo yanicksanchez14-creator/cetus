@@ -370,8 +370,11 @@ export class App {
       this.toast(d.chosen.id === "policy" ? d.chosen.label : `${/slow|yield/.test(d.chosen.id) && d.chosen.id !== "turn2slow12" ? "Speed change" : "Route change"}: ${d.chosen.label}`, "dec");
       if (this.cine) this.speedBoostUntil = now + 9000;
       if (!this.follow) this.flyTo(this.snap?.ship.lon ?? this.view.longitude, this.snap?.ship.lat ?? this.view.latitude, Math.max(this.view.zoom, 8.2));
-      // Don't pull the reader away from Story or Method: flag the Decision tab instead
-      if (this.tab === "story" || this.tab === "method") document.querySelector('.tab[data-tab="decision"]')?.classList.add("new");
+      // Don't pull the reader away from Story or Method, or open a closed panel: flag the Decision tab instead
+      if (this.tab === "story" || this.tab === "method" || $("panel").classList.contains("collapsed")) {
+        document.querySelector('.tab[data-tab="decision"]')?.classList.add("new");
+        if ($("panel").classList.contains("collapsed")) this.selectTab("decision");
+      }
       else this.selectTab("decision");
     }
     renderDecision($("tab-decision"), d, this.history);
@@ -1202,6 +1205,17 @@ export class App {
       this.follow = (e.target as HTMLInputElement).checked;
       if (this.follow && this.snap) this.flyTo(this.snap.ship.lon, this.snap.ship.lat, Math.max(this.view.zoom, 8));
     };
-    document.querySelectorAll<HTMLButtonElement>(".tab").forEach((b) => (b.onclick = () => this.selectTab(b.dataset.tab!)));
+    // Small screens: the panel starts closed (just its tabs) so the map and controls fit; a tab or the arrow opens it.
+    const panel = $("panel");
+    const narrow = window.matchMedia("(max-width: 860px)");
+    if (narrow.matches) panel.classList.add("collapsed");
+    narrow.addEventListener?.("change", (e) => panel.classList.toggle("collapsed", e.matches));
+    document.querySelectorAll<HTMLButtonElement>(".tab").forEach((b) => (b.onclick = () => {
+      if (narrow.matches && !panel.classList.contains("collapsed") && this.tab === b.dataset.tab) { panel.classList.add("collapsed"); return; }
+      panel.classList.remove("collapsed");
+      this.selectTab(b.dataset.tab!);
+    }));
+    $("panelToggle").onclick = () => panel.classList.toggle("collapsed");
+    $("btnMore").onclick = () => $("dock").classList.toggle("more");
   }
 }
