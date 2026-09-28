@@ -600,34 +600,43 @@ export class App {
         data: { length: n, attributes: { getPosition: { value: this.sensorPos, size: 2 }, getFillColor: { value: col, size: 4, normalized: true } } } as any,
         getRadius: 1, radiusUnits: "pixels", radiusScale: this.view.zoom > 9 ? 1.9 : this.view.zoom > 7.5 ? 1.5 : 1.1, radiusMinPixels: 0.8, stroked: false,
       }));
-      // Listening links: a steady line from each listener to the whale it is hearing, with a soft "energy" pulse
-      // gliding back and forth along it (~2.6 s per trip). Ships keep moving, so lines start where each ship is NOW.
+      // Listening links: a steady line from each listener to the whale it is hearing, with a faint glow gliding back
+      // and forth along it (~5 s per trip): a tiny, barely visible head and a short trail that fades behind it.
+      // Ships keep moving, so lines start where each ship is NOW.
       const tr = this.shown?.traffic;
       const shipAt = new Map<number, [number, number]>();
       if (tr?.idx) for (let k = 0; k < tr.idx.length; k++) shipAt.set(SHIP_SENSOR_BASE + tr.idx[k], [tr.lon[k], tr.lat[k]]);
       const nowPos = (id: number, f: [number, number]): [number, number] =>
         id === OWN_SHIP_SENSOR && this.shown ? [this.shown.ship.lon, this.shown.ship.lat] : shipAt.get(id) || f;
-      const links: { from: [number, number]; to: [number, number]; a: number; u: number }[] = [];
+      const links: { from: [number, number]; to: [number, number]; a: number; u: number; dir: number }[] = [];
       if (!this.replay) for (const l of this.links.values()) {
         const to = this.whaleFixAt.get(l.whaleId);
         if (!to) continue;
         const fadeIn = Math.min(1, (now - l.born) / 400);
         const fadeOut = l.dying ? Math.max(0, 1 - (now - l.dying) / 500) : 1;
-        const trip = ((now / 2600 + l.phase) % 2);
-        links.push({ from: nowPos(l.id, l.pos), to, a: fadeIn * fadeOut, u: ease(trip < 1 ? trip : 2 - trip) });
+        const trip = ((now / 5200 + l.phase) % 2);
+        links.push({ from: nowPos(l.id, l.pos), to, a: fadeIn * fadeOut, u: ease(trip < 1 ? trip : 2 - trip), dir: trip < 1 ? 1 : -1 });
       }
       layers.push(new PathLayer({
         id: "tri", data: links, getPath: (d: any) => [d.from, d.to], widthUnits: "pixels", getWidth: 1,
         getColor: (d: any) => [120, 235, 255, 95 * d.a], updateTriggers: { getColor: now },
       }));
-      const at = (d: any): [number, number] => [d.from[0] + (d.to[0] - d.from[0]) * d.u, d.from[1] + (d.to[1] - d.from[1]) * d.u];
-      layers.push(new ScatterplotLayer({
-        id: "tri-glow", data: links, getPosition: at, radiusUnits: "pixels", getRadius: 5, stroked: false,
-        getFillColor: (d: any) => [120, 235, 255, 45 * d.a], updateTriggers: { getPosition: now, getFillColor: now },
+      const lerp = (d: any, u: number): [number, number] => [d.from[0] + (d.to[0] - d.from[0]) * u, d.from[1] + (d.to[1] - d.from[1]) * u];
+      // the trail: short pieces behind the head, each fainter than the one before
+      const TRAIL = 7, STEP = 0.022;
+      const trail: { path: [number, number][]; alpha: number }[] = [];
+      for (const d of links) for (let k = 0; k < TRAIL; k++) {
+        const u0 = Math.min(1, Math.max(0, d.u - d.dir * k * STEP)), u1 = Math.min(1, Math.max(0, d.u - d.dir * (k + 1) * STEP));
+        if (u0 === u1) continue;
+        trail.push({ path: [lerp(d, u0), lerp(d, u1)], alpha: d.a * 150 * (1 - k / TRAIL) ** 2 });
+      }
+      layers.push(new PathLayer({
+        id: "tri-trail", data: trail, getPath: (d: any) => d.path, widthUnits: "pixels", getWidth: 2, capRounded: true,
+        getColor: (d: any) => [170, 245, 255, d.alpha], updateTriggers: { getPath: now, getColor: now },
       }));
       layers.push(new ScatterplotLayer({
-        id: "tri-pulse", data: links, getPosition: at, radiusUnits: "pixels", getRadius: 1.8, stroked: false,
-        getFillColor: (d: any) => [200, 250, 255, 230 * d.a], updateTriggers: { getPosition: now, getFillColor: now },
+        id: "tri-pulse", data: links, getPosition: (d: any) => lerp(d, d.u), radiusUnits: "pixels", getRadius: 1, stroked: false,
+        getFillColor: (d: any) => [215, 252, 255, 120 * d.a], updateTriggers: { getPosition: now, getFillColor: now },
       }));
       layers.push(new ScatterplotLayer({
         id: "tri-nodes", data: links, getPosition: (d: any) => d.from, stroked: true, filled: false, radiusUnits: "pixels",
