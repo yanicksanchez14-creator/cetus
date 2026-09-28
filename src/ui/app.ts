@@ -94,7 +94,7 @@ const MODE_INFO: Record<"ships" | "mix" | "network" | "single", { title: string;
   network: {
     title: "Buoy network",
     what: "3,000 hydrophone buoys by default (500-5,000 on the slider), ~3-4 km apart along the lanes. Nearly every call is heard by many buoys, so whales are located to within tens of metres.",
-    whatIf: "a dense network like this existed. It's the best case for locating whales, but it would be expensive to build and maintain.",
+    whatIf: "a dense network like this existed. It's purely theoretical: thousands of moored buoys would be very costly and hard to maintain, and would add marine debris, entanglement and navigation hazards. It shows how well whales could be found, not a practical plan.",
     watch: "Use the Sensors slider to see how fewer buoys change accuracy.",
   },
   single: {
@@ -143,6 +143,7 @@ export class App {
   private sensorFlash = new Float64Array(0);
   private sensorColors = new Uint8Array(0);
   private callFx: CallFx[] = [];
+  private lastFxAt = new Map<number, number>(); // whale id -> last time its call was drawn (real ms)
   private fixFx: { e: EllipseLL; t0: number }[] = [];
   private wake: [number, number][] = [];
   private plannedPath: [number, number][] = [];
@@ -207,6 +208,7 @@ export class App {
     this.spotlight = null;
     this.bubble = null;
     this.callFx = [];
+    this.lastFxAt.clear();
     this.fixFx = [];
     this.wake = [];
     this.wakeV = [];
@@ -266,6 +268,13 @@ export class App {
       if (this.wake.length > 8000) { this.wake.shift(); this.wakeV.shift(); this.wakeEpoch++; }
     }
     for (const c of s.calls) {
+      // Visual rhythm stays at 60x whatever the sim speed: each whale flashes at most as often as it would at 60x
+      // (at 1800x a humpback calls ~30 times a real second - the data is all used, only the drawing is thinned).
+      // Sightings always show.
+      const [a, b] = SPECIES[c.species].callIntervalS;
+      const gapMs = ((a + b) / 2 / 60) * 1000;
+      if (c.kind !== "sighting" && now - (this.lastFxAt.get(c.whaleId) ?? -Infinity) < gapMs) continue;
+      this.lastFxAt.set(c.whaleId, now);
       this.callFx.push({ call: c, t0: now });
       for (const id of c.sensors) if (id < this.sensorFlash.length) this.sensorFlash[id] = now;
       if (c.fix) this.fixFx.push({ e: c.fix, t0: now });

@@ -202,7 +202,7 @@ export function renderStory(el: HTMLElement) {
       <div class="mode-grid">
         <div class="mode-card m-ships"><b>Ships</b><span>Every real ship tows a hydrophone and carries a thermal camera, and they share what they hear. No new hardware at sea.</span></div>
         <div class="mode-card m-mix"><b>Mix</b><span>Ships plus one quiet seafloor station off each of 10 ports, like MBARI's MARS. ~10 stations instead of thousands of buoys.</span></div>
-        <div class="mode-card m-buoys"><b>Buoys</b><span>A dense hydrophone network along the lanes. Best accuracy, but thousands of moorings are costly and a hazard.</span></div>
+        <div class="mode-card m-buoys"><b>Buoys</b><span>A dense hydrophone network along the lanes. Purely theoretical: the best accuracy, but thousands of moorings would be very costly, hard to maintain and a hazard at sea.</span></div>
         <div class="mode-card m-today"><b>Slow zones</b><span>What exists today, at its best: a single buoy hears a whale; the ship slows to 10 knots in a zone around it (~15 nm here).</span></div>
       </div>`)}
 
@@ -315,7 +315,7 @@ export function renderMethod(el: HTMLElement) {
         Port San Luis, Santa Barbara, Port Hueneme, LA/Long Beach). <b>Good:</b> fin/blue located on ~79% of the route. <b>Bad:</b> the Big Sur gap.</span></div>
       <div class="mode-card m-buoys"><b>Buoys: dense network</b>
         <span>500–5,000 moored buoys along the lane (slider; default 3,000, ~3–4 km apart). <b>Good:</b> located along ~99% of the route, tens of metres.
-        <b>Bad:</b> costly to deploy and maintain, a hazard, an entanglement risk.</span></div>
+        <b>Bad:</b> purely theoretical. Very costly to deploy and maintain, and a source of marine debris, entanglement risk and navigation hazards.</span></div>
       <div class="mode-card m-today"><b>Slow zones: what exists today</b>
         <span>One listening buoy per hotspot; each detection means a 10-knot zone. Like the East Coast's triggered right-whale zones; California's are
         seasonal and voluntary. A <b>best case</b>: here every ship obeys.</span></div>`)}
