@@ -147,6 +147,9 @@ export class App {
   private sensorColors = new Uint8Array(0);
   private callFx: CallFx[] = [];
   private lastFxAt = new Map<number, number>(); // whale id -> last time its call was drawn (real ms)
+  /** listener -> whale links (key "whaleId:listenerId"); see the snapshot handler */
+  private links = new Map<string, { whaleId: number; id: number; pos: [number, number]; simT: number; realT: number; born: number; phase: number; dying?: number }>();
+  private whaleFixAt = new Map<number, [number, number]>();
   private fixFx: { e: EllipseLL; t0: number }[] = [];
   private wake: [number, number][] = [];
   private plannedPath: [number, number][] = [];
@@ -212,6 +215,8 @@ export class App {
     this.bubble = null;
     this.callFx = [];
     this.lastFxAt.clear();
+    this.links.clear();
+    this.whaleFixAt.clear();
     this.fixFx = [];
     this.wake = [];
     this.wakeV = [];
@@ -269,6 +274,26 @@ export class App {
       this.wake.push([s.ship.lon, s.ship.lat]);
       this.wakeV.push(s.ship.speed);
       if (this.wake.length > 8000) { this.wake.shift(); this.wakeV.shift(); this.wakeEpoch++; }
+    }
+    // Listening links: a steady line from each listener to the whale it is hearing (or seeing), kept alive while it
+    // keeps hearing it. Built from EVERY located call (not the thinned animation list).
+    for (const c of s.calls) {
+      if (!c.fix) continue;
+      this.whaleFixAt.set(c.whaleId, [c.fix.lon, c.fix.lat]);
+      const ids = c.from ? (c.fromIds ?? c.from.map((_, k) => -1 - k)) : c.sensors;
+      ids.slice(0, 8).forEach((id, k) => {
+        const key = `${c.whaleId}:${id}`;
+        const pos: [number, number] = c.from ? c.from[k] : [this.sensorPos[2 * id], this.sensorPos[2 * id + 1]];
+        const old = this.links.get(key);
+        this.links.set(key, { whaleId: c.whaleId, id, pos, simT: s.t, realT: now, born: old ? old.born : now, phase: old ? old.phase : Math.random() });
+      });
+    }
+    // a link lives while the whale keeps being heard: ~3 of its call intervals in sim time, and at least 1.5 s on screen
+    for (const [key, l] of this.links) {
+      const sp = SPECIES[s.whales.find((w) => w.id === l.whaleId)?.species ?? "fin"] ?? SPECIES.fin;
+      if (s.t - l.simT > 3 * sp.callIntervalS[1] && now - l.realT > 1500) { if (!l.dying) l.dying = now; }
+      else l.dying = undefined;
+      if (l.dying && now - l.dying > 500) this.links.delete(key);
     }
     for (const c of s.calls) {
       // Visual rhythm stays at 60x whatever the sim speed: each whale flashes at most as often as it would at 60x
@@ -575,28 +600,39 @@ export class App {
         data: { length: n, attributes: { getPosition: { value: this.sensorPos, size: 2 }, getFillColor: { value: col, size: 4, normalized: true } } } as any,
         getRadius: 1, radiusUnits: "pixels", radiusScale: this.view.zoom > 9 ? 1.9 : this.view.zoom > 7.5 ? 1.5 : 1.1, radiusMinPixels: 0.8, stroked: false,
       }));
-      // triangulation: lines from the buoys used to the located position (fades in ~1.3 s)
-      const tri: { from: [number, number]; to: [number, number]; age: number }[] = [];
-      // ships keep moving after they hear a call: draw each line from where that ship is NOW (our own ship too)
+      // Listening links: a steady line from each listener to the whale it is hearing, with a soft "energy" pulse
+      // gliding back and forth along it (~2.6 s per trip). Ships keep moving, so lines start where each ship is NOW.
       const tr = this.shown?.traffic;
       const shipAt = new Map<number, [number, number]>();
       if (tr?.idx) for (let k = 0; k < tr.idx.length; k++) shipAt.set(SHIP_SENSOR_BASE + tr.idx[k], [tr.lon[k], tr.lat[k]]);
-      const nowPos = (id: number | undefined, f: [number, number]): [number, number] =>
-        id === OWN_SHIP_SENSOR && this.shown ? [this.shown.ship.lon, this.shown.ship.lat] : (id !== undefined && shipAt.get(id)) || f;
-      for (const fx of this.callFx) {
-        const age = (now - fx.t0) / 1000;
-        if (age > 1.3 || !fx.call.fix) continue;
-        if (fx.call.from) fx.call.from.slice(0, 8).forEach((f, k) => tri.push({ from: nowPos(fx.call.fromIds?.[k], f), to: [fx.call.fix!.lon, fx.call.fix!.lat], age }));
-        else for (const id of fx.call.sensors.slice(0, 8)) tri.push({ from: [this.sensorPos[2 * id], this.sensorPos[2 * id + 1]], to: [fx.call.fix.lon, fx.call.fix.lat], age });
+      const nowPos = (id: number, f: [number, number]): [number, number] =>
+        id === OWN_SHIP_SENSOR && this.shown ? [this.shown.ship.lon, this.shown.ship.lat] : shipAt.get(id) || f;
+      const links: { from: [number, number]; to: [number, number]; a: number; u: number }[] = [];
+      if (!this.replay) for (const l of this.links.values()) {
+        const to = this.whaleFixAt.get(l.whaleId);
+        if (!to) continue;
+        const fadeIn = Math.min(1, (now - l.born) / 400);
+        const fadeOut = l.dying ? Math.max(0, 1 - (now - l.dying) / 500) : 1;
+        const trip = ((now / 2600 + l.phase) % 2);
+        links.push({ from: nowPos(l.id, l.pos), to, a: fadeIn * fadeOut, u: ease(trip < 1 ? trip : 2 - trip) });
       }
       layers.push(new PathLayer({
-        id: "tri", data: tri, getPath: (d: any) => [d.from, d.to], widthUnits: "pixels", getWidth: 1,
-        getColor: (d: any) => [120, 235, 255, 150 * (1 - d.age / 1.3)], updateTriggers: { getColor: now },
+        id: "tri", data: links, getPath: (d: any) => [d.from, d.to], widthUnits: "pixels", getWidth: 1,
+        getColor: (d: any) => [120, 235, 255, 95 * d.a], updateTriggers: { getColor: now },
+      }));
+      const at = (d: any): [number, number] => [d.from[0] + (d.to[0] - d.from[0]) * d.u, d.from[1] + (d.to[1] - d.from[1]) * d.u];
+      layers.push(new ScatterplotLayer({
+        id: "tri-glow", data: links, getPosition: at, radiusUnits: "pixels", getRadius: 5, stroked: false,
+        getFillColor: (d: any) => [120, 235, 255, 45 * d.a], updateTriggers: { getPosition: now, getFillColor: now },
       }));
       layers.push(new ScatterplotLayer({
-        id: "tri-nodes", data: tri, getPosition: (d: any) => d.from, stroked: true, filled: false, radiusUnits: "pixels",
-        getRadius: (d: any) => 2.5 + 5 * ease(d.age / 1.3), getLineColor: (d: any) => [150, 240, 255, 220 * (1 - d.age / 1.3)],
-        lineWidthUnits: "pixels", getLineWidth: 1, updateTriggers: { getRadius: now, getLineColor: now },
+        id: "tri-pulse", data: links, getPosition: at, radiusUnits: "pixels", getRadius: 1.8, stroked: false,
+        getFillColor: (d: any) => [200, 250, 255, 230 * d.a], updateTriggers: { getPosition: now, getFillColor: now },
+      }));
+      layers.push(new ScatterplotLayer({
+        id: "tri-nodes", data: links, getPosition: (d: any) => d.from, stroked: true, filled: false, radiusUnits: "pixels",
+        getRadius: 3.5, getLineColor: (d: any) => [150, 240, 255, 170 * d.a],
+        lineWidthUnits: "pixels", getLineWidth: 1, updateTriggers: { getPosition: now, getLineColor: now },
       }));
     }
     const s = this.shown;
