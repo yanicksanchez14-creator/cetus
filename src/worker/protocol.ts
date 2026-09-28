@@ -55,6 +55,7 @@ export interface SnapCall {
   lat: number;
   sensors: number[]; // ids of buoys that heard it (buoy modes)
   from?: [number, number][]; // ships mode: positions of the ships that heard / saw it
+  fromIds?: number[]; // their sensor ids (to draw lines from where those ships are now)
   kind?: "call" | "sighting"; // sighting = thermal camera
   fix?: EllipseLL;
   errorKm?: number;
@@ -80,7 +81,7 @@ export interface Snapshot {
   tracks: SnapTrack[];
   zones: SnapZone[];
   calls: SnapCall[]; // new since last snapshot
-  traffic?: { lon: number[]; lat: number[]; hdg: number[]; cls: number[]; heard: number[] }; // ships mode
+  traffic?: { lon: number[]; lat: number[]; hdg: number[]; cls: number[]; heard: number[]; idx: number[] }; // ships mode
   coverage: { s: number; lon: number; lat: number; hump: number; fin: number }[]; // new blind-spot samples
   cautionPrompt: CautionPrompt | null; // waiting for the user's answer (sim is paused by the UI meanwhile)
   cautionActive: boolean;

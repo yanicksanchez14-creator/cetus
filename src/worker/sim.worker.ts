@@ -84,6 +84,7 @@ function snapshot(): Snapshot {
       id: c.id, t: c.t, whaleId: c.whaleId, species: c.species, lon: clon, lat: clat,
       sensors: usesShips(s.opts.mode) ? [] : c.detected.map((d) => d.sensor.id),
       from: usesShips(s.opts.mode) ? c.detected.slice(0, 12).map((d) => d.sensor.ll as [number, number]) : undefined,
+      fromIds: usesShips(s.opts.mode) ? c.detected.slice(0, 12).map((d) => d.sensor.id) : undefined,
       kind: c.kind ?? "call",
       fix: c.fix ? ell(c.fix.x, c.fix.y, c.fix.cov) : undefined, errorKm: c.errorKm,
       rangeKm: nominalRangeKm(SPECIES[c.species]),
@@ -96,12 +97,13 @@ function snapshot(): Snapshot {
   let trafficSnap: Snapshot["traffic"];
   if (usesShips(s.opts.mode) && s.traffic) {
     const now = s.traffic.at(s.t);
-    trafficSnap = { lon: [], lat: [], hdg: [], cls: [], heard: [] };
+    trafficSnap = { lon: [], lat: [], hdg: [], cls: [], heard: [], idx: [] };
     for (const q of now) {
       const [qlon, qlat] = toLL(q.pos[0], q.pos[1]);
       trafficSnap.lon.push(qlon);
       trafficSnap.lat.push(qlat);
       trafficSnap.hdg.push(q.heading);
+      trafficSnap.idx.push(q.idx);
       trafficSnap.cls.push(CLS[s.traffic.ships[q.idx].cls] ?? 0);
       const h = heardAt.get(q.idx);
       trafficSnap.heard.push(h === undefined ? 1e9 : s.t - h);

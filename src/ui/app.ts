@@ -18,6 +18,9 @@ import { FleetLab } from "./lab";
 
 type RGBA = [number, number, number, number];
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
+/** Sensor ids for ships, as in engine/sim.ts (kept here so the UI bundle doesn't pull in the simulation). */
+const SHIP_SENSOR_BASE = 1_000_000;
+const OWN_SHIP_SENSOR = 999_999;
 
 const SHIP_SVG = `data:image/svg+xml;utf8,${encodeURIComponent(
   `<svg xmlns="http://www.w3.org/2000/svg" width="64" height="160" viewBox="0 0 64 160"><defs><linearGradient id="g" x1="0" x2="1"><stop offset="0" stop-color="#cfe0ee"/><stop offset=".5" stop-color="#ffffff"/><stop offset="1" stop-color="#b7cadb"/></linearGradient></defs><path d="M32 3 C45 22 51 44 51 70 L51 148 Q32 157 13 148 L13 70 C13 44 19 22 32 3Z" fill="url(#g)" stroke="#5fe1ff" stroke-width="3"/><rect x="19" y="114" width="26" height="20" rx="3" fill="#7f98ae"/><rect x="21" y="40" width="22" height="64" rx="2" fill="#dbe7f1" stroke="#9fb4c8" stroke-width="1.5"/></svg>`,
@@ -574,10 +577,16 @@ export class App {
       }));
       // triangulation: lines from the buoys used to the located position (fades in ~1.3 s)
       const tri: { from: [number, number]; to: [number, number]; age: number }[] = [];
+      // ships keep moving after they hear a call: draw each line from where that ship is NOW (our own ship too)
+      const tr = this.shown?.traffic;
+      const shipAt = new Map<number, [number, number]>();
+      if (tr?.idx) for (let k = 0; k < tr.idx.length; k++) shipAt.set(SHIP_SENSOR_BASE + tr.idx[k], [tr.lon[k], tr.lat[k]]);
+      const nowPos = (id: number | undefined, f: [number, number]): [number, number] =>
+        id === OWN_SHIP_SENSOR && this.shown ? [this.shown.ship.lon, this.shown.ship.lat] : (id !== undefined && shipAt.get(id)) || f;
       for (const fx of this.callFx) {
         const age = (now - fx.t0) / 1000;
         if (age > 1.3 || !fx.call.fix) continue;
-        if (fx.call.from) for (const f of fx.call.from.slice(0, 8)) tri.push({ from: f, to: [fx.call.fix.lon, fx.call.fix.lat], age });
+        if (fx.call.from) fx.call.from.slice(0, 8).forEach((f, k) => tri.push({ from: nowPos(fx.call.fromIds?.[k], f), to: [fx.call.fix!.lon, fx.call.fix!.lat], age }));
         else for (const id of fx.call.sensors.slice(0, 8)) tri.push({ from: [this.sensorPos[2 * id], this.sensorPos[2 * id + 1]], to: [fx.call.fix.lon, fx.call.fix.lat], age });
       }
       layers.push(new PathLayer({
