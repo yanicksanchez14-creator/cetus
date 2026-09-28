@@ -143,7 +143,7 @@ export function renderStory(el: HTMLElement) {
         Cetus asks: <b>if we could locate each whale, how much safer and cheaper could protecting it be?</b></p>
       <div class="hero-nums">
         <div><b>~83</b><span>whales killed by ships, US West Coast, each Jul–Dec</span></div>
-        <div><b>+0.04%</b><span>trip cost to steer around whales a dense buoy network locates</span></div>
+        <div><b>+0.15%</b><span>trip cost to steer around whales a dense buoy network locates</span></div>
         <div><b>+5%</b><span>trip cost of blanket slow zones</span></div>
       </div>
     </div>
@@ -151,8 +151,8 @@ export function renderStory(el: HTMLElement) {
     <div class="tldr"><b>The short version</b>
       <ul><li>Today, protection is <b>blanket and voluntary</b>: slow a whole region, whether a whale is there or not.</li>
         <li>If sensors could <b>locate</b> each whale, a ship could steer 1–2 km around it and keep its speed.</li>
-        <li>With a dense sensor network the simulation cut strike risk by <b>~94% for about $80 per voyage</b>. Slow zones cut it ~83% for about <b>$11,700</b>.</li>
-        <li>Ships alone cut it ~67%: their own noise and the gaps between them leave many whales, most humpbacks, unlocated.</li></ul></div>
+        <li>With a dense sensor network the simulation cut strike risk by <b>~95% for about $340 per voyage</b>. Slow zones cut it ~84% for about <b>$10,700</b>.</li>
+        <li>Ships sharing what they hear cut it ~85% for almost nothing (~$10), but they locate fin and blue whales along only half the route and almost never humpbacks.</li></ul></div>
 
     <nav class="doc-toc">${["The problem", "What ships do today", "The idea", "What would a real captain do?", "Four what-ifs", "What the simulation shows"]
       .map((t) => `<a href="#sec-${t.toLowerCase().replace(/[^a-z]+/g, "-")}">${t.replace("What would a real captain do?", "A captain's view").replace("What the simulation shows", "Results")}</a>`).join("")}</nav>
@@ -208,18 +208,18 @@ export function renderStory(el: HTMLElement) {
 
     ${acc("7", "What the simulation shows", "Locating whales well is both the cheapest and the safest", `
       <div class="res-grid">
-        <div class="res"><b>−94%</b><span>strike risk with a dense buoy network, for ~$80 extra per voyage.</span></div>
-        <div class="res bad"><b>−83%</b><span>with slow zones, for ~$11,700 extra and ~1.5 hours late.</span></div>
-        <div class="res warn"><b>−67%</b><span>with ships alone (~$50 per voyage): many whales are never located.</span></div>
-        <div class="res warn"><b>−78%</b><span>with ships plus 10 port stations (Mix), for ~$530 per voyage.</span></div>
+        <div class="res"><b>−95%</b><span>strike risk with a dense buoy network, for ~$340 extra per voyage.</span></div>
+        <div class="res bad"><b>−84%</b><span>with slow zones, for ~$10,700 extra and ~1.4 hours late.</span></div>
+        <div class="res warn"><b>−85%</b><span>with ships alone (~$10 per voyage), though many whales are never located.</span></div>
+        <div class="res warn"><b>−78%</b><span>with ships plus 10 port stations (Mix), for ~$100 per voyage.</span></div>
       </div>
       <ul class="findings">
         <li><b>Ships alone leave gaps.</b> A ship's own engine noise means it hears a humpback only ~4 km away.</li>
-        <li><b>Mix closes most of them</b> with no surface buoys. <b>Big Sur</b> is the big blind spot: no port, no station. Two or three stations there would close it.</li>
+        <li><b>Mix closes many of them</b> with no surface buoys: fin and blue whales can be located along ~78% of the route instead of ~49%. In these runs that didn't cut risk further than Ships alone; the gap between the two (~85% vs ~78%) is within the noise of 120 voyages. <b>Big Sur</b> is the big blind spot: no port, no station.</li>
         <li><b>Humpbacks stay the hardest.</b> Their song is quiet; cameras and a short precautionary slow-down protect them.</li>
       </ul>
-      <p class="small muted">Averages over 12 test voyages per mode with 8 whales; small samples, so treat them as rough (the Fleet lab runs more).
-        Fin and blue whales can be located along ~51% of the route with Ships, ~79% with Mix and ~99% with Buoys; humpbacks almost only with Buoys. Simulation results under the assumptions in Method, not field measurements.
+      <p class="small muted">Averages over 120 test voyages per mode with 8 whales. Close passes are rare events (about one per two voyages if the ship ignored whales), so differences of a few points are noise.
+        Fin and blue whales can be located along ~49% of the route with Ships, ~78% with Mix and ~99% with Buoys; humpbacks ~1% with Ships or Mix and ~98% with Buoys. Simulation results under the assumptions in Method, not field measurements.
         Whales are simulated; in Ships and Mix the ship traffic is real (AIS, 14–15 Aug 2024).</p>`)}
 
     ${acc("8", "Try it yourself", "Fleet lab and replay", `
@@ -338,7 +338,7 @@ export function renderMethod(el: HTMLElement) {
       <p>Measured, not estimated: fuel actually burned vs a ship holding 16 knots over the same distance (at $1,346/t), plus time behind schedule at
         <b>$4,200/hour</b> (~$100k/day: charter hire, which includes crew, plus running costs; an assumption). A normal trip costs about <b>$224k</b> (~$126k fuel + ~$98k ship time).</p>
       <ul class="findings">
-        <li><b>Course shifts</b>: a little extra fuel and a minute or two, typically tens of dollars per voyage.</li>
+        <li><b>Course shifts</b>: a little extra fuel and a minute or two, typically tens of dollars per shift.</li>
         <li><b>Slowing down saves fuel</b> (power ∝ speed³). At these prices a short slow-down that fits in the schedule's slack can even save money:
           the fuel saved outweighs the lost time unless ship time is worth more than ~$4,600/h (for a slow-down to 10 kn; more for a milder one). So "steer first" is a rule about <b>schedules</b>
           (berth windows, connections), not about fuel.</li>

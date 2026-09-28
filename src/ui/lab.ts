@@ -32,13 +32,13 @@ const usdK = (v: number) => {
 const mean = (a: number[]) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : NaN);
 const q = (a: number[], f: number) => { const s = [...a].sort((x, y) => x - y); return s.length ? s[Math.min(s.length - 1, Math.max(0, Math.round(f * (s.length - 1))))] : NaN; };
 
-/** Reference results (12 voyages per mode, 8 whales, precaution = slow) used until you run your own batch. */
+/** Reference results (120 voyages per mode, 8 whales, precaution = slow) used until you run your own batch. */
 const REFERENCE: Record<ModeId, { usd: number; lateMin: number; riskHold: number; riskTaken: number }> = {
   // riskHold / riskTaken: close passes (<500 m) weighted by lethality at speed, per voyage (hindsight, true whales)
-  ships: { usd: 46, lateMin: 21, riskHold: 0.421, riskTaken: 0.14 },
-  mix: { usd: 534, lateMin: 21, riskHold: 0.421, riskTaken: 0.093 },
-  network: { usd: 81, lateMin: 15, riskHold: 0.421, riskTaken: 0.026 },
-  single: { usd: 11682, lateMin: 94, riskHold: 0.421, riskTaken: 0.072 },
+  ships: { usd: 10, lateMin: 16, riskHold: 0.442, riskTaken: 0.067 },
+  mix: { usd: 97, lateMin: 13, riskHold: 0.442, riskTaken: 0.096 },
+  network: { usd: 335, lateMin: 8, riskHold: 0.442, riskTaken: 0.023 },
+  single: { usd: 10717, lateMin: 86, riskHold: 0.442, riskTaken: 0.071 },
 };
 
 export interface LabSettings { seed: number; whaleCount: number; sensorCount: number; sigmaMs: number; routeId: string }
@@ -320,7 +320,7 @@ export class FleetLab {
   private perVoyage(m: ModeId) {
     const s = this.stats(m);
     if (s && s.n >= 3) return { usd: s.usd, lateMin: s.late, riskHold: s.riskHold, riskTaken: s.riskTaken, src: `your ${s.n}-voyage batch` };
-    return { ...REFERENCE[m], src: "reference runs, 12 voyages per mode" };
+    return { ...REFERENCE[m], src: "reference runs, 120 voyages per mode" };
   }
 
   private businessHtml(): string {
