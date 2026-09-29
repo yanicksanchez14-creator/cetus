@@ -77,10 +77,13 @@ that ignored them. These are **simulation outputs under the stated assumptions**
      slow down, choosing the safe option that loses the least time. If nothing works and the whale is >20 min away, keep
      listening; otherwise take the best cost-benefit option (valuing a great whale at $2M, Chami et al. 2019).
 5. **Act late, steer gently.** Nothing is committed until \~30 minutes before the danger begins: every call sharpens the
-   forecast, so the final shift is usually small. Turns go at most 20° out (25° if the whale is found late) and 10° back;
-   if the plan changes mid-manoeuvre, the new track starts from where the ship actually is.
+   forecast, so the final shift is usually small. Turns go at most 20° out (25° if the whale is found late). Slow-downs
+   cover only the stretch where the risk is (5% to 95% of it, plus \~3 km). Once the whale is behind the ship, it returns
+   to the lane and normal speed straight away; whales behind the ship are ignored. If the plan changes mid-manoeuvre, the
+   new track starts from where the ship actually is.
 6. **Precaution (Ships/Mix).** If our own towed array hears an unlocated whale nearly dead ahead that sounds close, the
-   ship can slow to 13 kn for up to \~6.5 km (your setting: slow down, ask, or hold speed).
+   ship can slow to 13 kn for up to \~6.5 km once the call is heard twice from the same direction (your setting: slow
+   down, ask, or hold speed).
 7. **Explain.** Every number in the panel and the ship's chat bubble comes from these formulas. Nothing is generated
    by a language model. The **Method** tab lists every assumption and its source.
 

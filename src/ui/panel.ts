@@ -296,15 +296,15 @@ export function renderMethod(el: HTMLElement) {
         <li>Commit nothing until <b>~30 minutes</b> before the danger begins: every call sharpens the forecast.</li>
       </ol>
       <table class="tbl small">
-        <tr><td><b>Shift 1–5 km</b><br><span class="muted">first choice</span></td><td>Smallest safe size wins. Turns up to 20° out (25° if the whale is found late), 10° back. Eased down as the position sharpens
+        <tr><td><b>Shift 1–5 km</b><br><span class="muted">first choice</span></td><td>Smallest safe size wins. Turns up to 20° out (25° if the whale is found late). Back to the lane (at ~12°) as soon as the whale is behind the ship. Eased down as the position sharpens
           (never in the last 10 min, never below 1 km); never swaps sides mid-turn unless its side becomes unsafe.</td></tr>
-        <tr><td><b>Slow to 12 / 10 kn</b><br><span class="muted">fallback</span></td><td>Through the conflict zone only.</td></tr>
+        <tr><td><b>Slow to 12 / 10 kn</b><br><span class="muted">fallback</span></td><td>Only over the stretch where the danger is (from where 5% of the risk starts to where 95% is covered, plus ~3 km); normal speed again once the whale is behind the ship.</td></tr>
         <tr><td><b>Shift 2 km + 12 kn</b></td><td>Both at once (fallback).</td></tr>
         <tr><td><b>Precaution (13 kn)</b><br><span class="muted">Ships/Mix</span></td><td>Our own towed array hears an unlocated whale nearly dead ahead (±30°) and close
           (≤ ~3 km, from loudness), heard twice from the same direction within 10 min. Slow to 13 kn for at most ~6.5 km, then a 10-min pause. Your setting: slow, ask, or hold.</td></tr>
         <tr><td><b>Slow zone</b></td><td>Blanket 10 kn in a zone ~28 km (~15 nm, an app assumption) around a detection: shown for comparison, used in Slow zones mode.</td></tr>
       </table>
-      <p class="small">Mid-manoeuvre, the ship only changes plan for a clear reason (unsafe, or much cheaper), and a new plan starts from where the ship is.</p>`)}
+      <p class="small">Mid-manoeuvre, the ship only changes plan for a clear reason (unsafe, or much cheaper), and a new plan starts from where the ship is. Whales already behind the ship are ignored.</p>`)}
 
     ${acc("5", "Monitoring modes", "What's at sea in each what-if", `
       <div class="mode-card m-ships"><b>Ships: ships as sensors</b>
@@ -312,7 +312,7 @@ export function renderMethod(el: HTMLElement) {
         camera. Hears less because of its own noise; needs 3+ ships in range. <b>Good:</b> no hardware in the water. <b>Bad:</b> gaps where traffic is thin; humpbacks rarely located.</span></div>
       <div class="mode-card m-mix"><b>Mix: ships + port stations</b>
         <span>Ships plus 10 quiet cabled seafloor hydrophones off major ports (Bodega Bay, San Francisco, Half Moon Bay, Santa Cruz, Monterey/MARS, Morro Bay,
-        Port San Luis, Santa Barbara, Port Hueneme, LA/Long Beach). <b>Good:</b> fin/blue located on ~79% of the route. <b>Bad:</b> the Big Sur gap.</span></div>
+        Port San Luis, Santa Barbara, Port Hueneme, LA/Long Beach). <b>Good:</b> fin/blue located on ~76% of the route. <b>Bad:</b> the Big Sur gap.</span></div>
       <div class="mode-card m-buoys"><b>Buoys: dense network</b>
         <span>500–5,000 moored buoys along the lane (slider; default 3,000, ~3–4 km apart). <b>Good:</b> located along ~99% of the route, tens of metres.
         <b>Bad:</b> purely theoretical. Very costly to deploy and maintain, and a source of marine debris, entanglement risk and navigation hazards.</span></div>
