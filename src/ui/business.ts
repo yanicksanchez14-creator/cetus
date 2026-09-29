@@ -50,6 +50,8 @@ export interface BizState {
   stations: number; // Mix
   buoys: number; // Buoys
   compliance: number; // % of voyages that would otherwise slow down in slow zones
+  szScale: number; // value of ship time vs the base ($4,200/h), % (scales the slow-zone cost per voyage)
+  season: number; // % of a year's voyages that fall inside the slow-zone season
   uptake: number; // % of ships that act on located-whale advice from a public network (Buoys)
   regionVoyages: number; // large-ship voyages a year through the area
   deaths: number; // whale deaths a year from ship strikes (California, no protection)
@@ -62,7 +64,7 @@ export interface BizState {
 }
 
 export const DEFAULT_BIZ: BizState = {
-  mode: "ships", fleet: 20, voyagesPerShip: 25, stations: 10, buoys: 500, compliance: 70, uptake: 90,
+  mode: "ships", fleet: 20, voyagesPerShip: 25, stations: 10, buoys: 500, compliance: 65, season: 62, szScale: 100, uptake: 90,
   regionVoyages: 2500, deaths: 60, whaleValue: 2_000_000,
   kitCapex: 150_000, kitOpex: 20_000, stationCapex: 4_000_000, stationOpex: 250_000,
   buoyCapex: 75_000, buoyOpex: 20_000, platform: 1_500_000, years: 10, discountPct: 7,
@@ -98,9 +100,12 @@ export interface Result {
   cash: number[]; // cumulative discounted cash, year 0..years
 }
 
+/** Slow-zone cost per voyage at the chosen value of ship time. */
+const szOp = (s: BizState): Point => ({ ...SLOW_ZONES, usd: SLOW_ZONES.usd * (s.szScale ?? 100) / 100 });
+
 /** Per-voyage operating point for a mode at the chosen scale. */
 export function operatingPoint(s: BizState, mode: BizMode): { op: Point; share: number } {
-  if (mode === "single") return { op: SLOW_ZONES, share: 0 };
+  if (mode === "single") return { op: szOp(s), share: 0 };
   if (mode === "network") return { op: lerp(CURVES.network, s.buoys), share: 0 };
   // share of the traffic carrying a kit (traffic-weighted: a ship making many voyages counts more); our own ship
   // is always equipped, so a program of 1 ship is the "own ship only" point
@@ -115,7 +120,8 @@ export function operatingPoint(s: BizState, mode: BizMode): { op: Point; share: 
 export function evaluate(s: BizState, mode: BizMode = s.mode): Result {
   const { op, share } = operatingPoint(s, mode);
   const i = s.discountPct / 100, Y = Math.max(1, Math.round(s.years));
-  const c = s.compliance / 100;
+  // only voyages in slow-zone season that would have complied lose time today, so only they can save
+  const c = (s.compliance / 100) * (s.season / 100);
   const perShipVoy = mode === "ships" || mode === "mix";
   const voyages = mode === "single" || mode === "network" ? s.regionVoyages : Math.min(s.fleet * s.voyagesPerShip, s.regionVoyages);
   let capex = 0, opex = 0;
@@ -124,7 +130,7 @@ export function evaluate(s: BizState, mode: BizMode = s.mode): Result {
   if (mode === "network") { capex += s.buoys * s.buoyCapex; opex += s.buoys * s.buoyOpex + s.platform; }
   // Savings vs complying with slow zones: only voyages that would otherwise have slowed down save anything.
   // Slow zones themselves are the baseline (no savings; their cost is borne by shipping).
-  const savingsPerVoyage = mode === "single" ? 0 : SLOW_ZONES.usd - op.usd;
+  const savingsPerVoyage = mode === "single" ? 0 : szOp(s).usd - op.usd;
   const savings = voyages * c * savingsPerVoyage;
   const protectionCost = mode === "single" ? voyages * c * op.usd : 0;
   const net = mode === "single" ? -protectionCost : savings - opex;
@@ -167,6 +173,104 @@ export function breakEven(s: BizState, mode: BizMode): number {
 }
 const sizes = (s: BizState) => { const out: number[] = []; for (let n = 1; n <= maxFleet(s); n = n < 10 ? n + 1 : n < 100 ? n + 2 : n + 10) out.push(n); return out; };
 
+// ------------------------------------------------------------------------------------------------ scenarios
+export type Scenario = "conservative" | "base" | "optimistic";
+const SCEN_KEYS = ["compliance", "season", "szScale", "kitCapex", "kitOpex", "stationCapex", "stationOpex", "buoyCapex", "buoyOpex", "platform", "discountPct", "uptake", "whaleValue"] as const;
+const pickScen = (s: BizState) => Object.fromEntries(SCEN_KEYS.map((k) => [k, s[k]])) as Partial<BizState>;
+export const SCENARIOS: Record<Scenario, Partial<BizState>> = {
+  // pessimistic on every input at once: fewer ships slow down today, shorter season, cheaper ship time, dearer kit
+  conservative: { compliance: 55, season: 55, szScale: 75, kitCapex: 225_000, kitOpex: 30_000, stationCapex: 6_000_000, stationOpex: 375_000, buoyCapex: 110_000, buoyOpex: 30_000, platform: 2_250_000, discountPct: 10, uptake: 75, whaleValue: 1_000_000 },
+  base: pickScen(DEFAULT_BIZ),
+  optimistic: { compliance: 75, season: 70, szScale: 125, kitCapex: 100_000, kitOpex: 15_000, stationCapex: 3_000_000, stationOpex: 200_000, buoyCapex: 50_000, buoyOpex: 15_000, platform: 1_000_000, discountPct: 5, uptake: 95, whaleValue: 3_000_000 },
+};
+export const applyScenario = (s: BizState, k: Scenario): BizState => ({ ...s, ...SCENARIOS[k] });
+export const scenarioOf = (s: BizState): Scenario | null =>
+  (Object.keys(SCENARIOS) as Scenario[]).find((k) => SCEN_KEYS.every((key) => SCENARIOS[k][key] === s[key])) ?? null;
+
+export function scenarioHtml(s: BizState): string {
+  const cur = scenarioOf(s);
+  const btn = (k: Scenario, label: string) => `<button data-scen="${k}" class="${cur === k ? "on" : ""}">${label}</button>`;
+  return `<div class="bz-scen"><span class="small muted">Assumptions ${ii("bizScenario")}</span>
+    <div class="seg">${btn("conservative", "Conservative")}${btn("base", "Base")}${btn("optimistic", "Optimistic")}</div>
+    ${cur ? "" : `<span class="small muted">custom (edited below)</span>`}</div>`;
+}
+
+/** NPV under all three scenarios at the current program size: the planning range. */
+function rangeHtml(s: BizState): string {
+  const keep = { mode: s.mode, fleet: s.fleet, voyagesPerShip: s.voyagesPerShip, stations: s.stations, buoys: s.buoys };
+  const v = (["conservative", "base", "optimistic"] as Scenario[]).map((k) => ({ k, r: evaluate({ ...applyScenario(s, k), ...keep }) }));
+  const cur = scenarioOf(s) ? null : evaluate(s);
+  const all = [...v.map((x) => x.r.npv), ...(cur ? [cur.npv] : []), 0];
+  const lo = Math.min(...all), hi = Math.max(...all);
+  const W = 640, H = 64, L = 12, R = 12;
+  const x = (n: number) => L + ((W - L - R) * (n - lo)) / (hi - lo || 1);
+  const name = { conservative: "Conservative", base: "Base", optimistic: "Optimistic" } as const;
+  const col = (n: number) => (n >= 0 ? "#5ef0a4" : "#ff7a85");
+  const be = (["conservative", "base", "optimistic"] as Scenario[]).map((k) => breakEven({ ...applyScenario(s, k), ...keep }, s.mode));
+  const unit = s.mode === "network" ? "buoys" : "ships";
+  return `<figure class="lab-fig"><figcaption>Planning range: ${s.years}-year NPV at this program size under each scenario ${ii("bizScenario")}</figcaption>
+    <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="NPV range across scenarios">
+      <line x1="${x(v[0].r.npv)}" x2="${x(v[2].r.npv)}" y1="30" y2="30" stroke="rgba(255,255,255,0.25)" stroke-width="6" stroke-linecap="round"/>
+      <line x1="${x(0)}" x2="${x(0)}" y1="14" y2="46" stroke="rgba(255,255,255,0.45)" stroke-dasharray="2 3"/><text class="tick" x="${x(0)}" y="60" text-anchor="middle">$0</text>
+      ${v.map(({ k, r }, i) => `<circle cx="${x(r.npv)}" cy="30" r="${k === "base" ? 6 : 5}" fill="${col(r.npv)}"><title>${name[k]}: ${money(r.npv)}</title></circle>
+        <text class="val" x="${x(r.npv)}" y="${i === 1 ? 12 : 12}" text-anchor="${i === 0 ? "start" : i === 2 ? "end" : "middle"}" fill="${col(r.npv)}">${name[k]} ${money(r.npv)}</text>`).join("")}
+      ${cur ? `<circle cx="${x(cur.npv)}" cy="30" r="4" fill="#fff"><title>Your custom inputs: ${money(cur.npv)}</title></circle>` : ""}
+    </svg>
+    <div class="small muted">${s.mode === "single" ? "" : `Break-even size: ${be.map((b, i) => `${["conservative", "base", "optimistic"][i]} ${isFinite(b) ? `${num(b)} ${unit}` : "never"}`).join(" · ")}.`}
+      ${v[0].r.npv >= 0 ? "Pays off even in the conservative case." : v[2].r.npv < 0 ? "Doesn't pay off on savings alone even in the optimistic case." : "The answer depends on the assumptions: see which ones matter most below."}</div>
+  </figure>`;
+}
+
+/** Tornado: NPV when each input moves ±25% with the others held at current values, largest swing first. */
+function tornadoHtml(s: BizState): string {
+  const base = evaluate(s).npv;
+  type K = keyof BizState;
+  const P: { k: K; label: string; pct?: boolean; modes: BizMode[] }[] = [
+    { k: "compliance", label: "Ships obeying slow zones", pct: true, modes: ["ships", "mix", "network"] },
+    { k: "season", label: "Voyages in season", pct: true, modes: ["ships", "mix", "network"] },
+    { k: "szScale", label: "Value of ship time", modes: ["ships", "mix", "network"] },
+    { k: "voyagesPerShip", label: "Voyages per ship", modes: ["ships", "mix"] },
+    { k: "kitCapex", label: "Kit price", modes: ["ships", "mix"] },
+    { k: "kitOpex", label: "Kit servicing", modes: ["ships", "mix"] },
+    { k: "stationCapex", label: "Station build cost", modes: ["mix"] },
+    { k: "stationOpex", label: "Station running cost", modes: ["mix"] },
+    { k: "buoyCapex", label: "Buoy price", modes: ["network"] },
+    { k: "buoyOpex", label: "Buoy servicing", modes: ["network"] },
+    { k: "platform", label: "Data platform", modes: ["ships", "mix", "network"] },
+    { k: "discountPct", label: "Discount rate", modes: ["ships", "mix", "network"] },
+  ];
+  const bars = P.filter((p) => p.modes.includes(s.mode)).map((p) => {
+    const v0 = s[p.k] as number;
+    const at = (f: number) => { let v = v0 * f; if (p.pct) v = Math.min(100, v); const t = { ...s, [p.k]: v } as BizState; t.fleet = Math.min(t.fleet, maxFleet(t)); return evaluate(t).npv; };
+    const dn = at(0.75), up = at(1.25);
+    return { ...p, dn, up, swing: Math.abs(up - dn) };
+  }).sort((a, b) => b.swing - a.swing);
+  if (!bars.length) return "";
+  const span = [base, ...bars.flatMap((b) => [b.dn, b.up])];
+  const sLo = Math.min(...span), sHi = Math.max(...span);
+  // show $0 only when it is near the bars; otherwise it squeezes them into a corner
+  const withZero = 0 >= sLo - 0.6 * (sHi - sLo) && 0 <= sHi + 0.6 * (sHi - sLo);
+  const lo = withZero ? Math.min(0, sLo) : sLo, hi = withZero ? Math.max(0, sHi) : sHi;
+  const W = 640, L = 196, R = 16, T = 8, rowH = 22, H = T + bars.length * rowH + 22;
+  const x = (n: number) => L + ((W - L - R) * (n - lo)) / (hi - lo || 1);
+  const seg = (a: number, b: number, y: number, c: string, t: string) => `<rect x="${Math.min(x(a), x(b)).toFixed(1)}" y="${y}" width="${Math.max(1, Math.abs(x(b) - x(a))).toFixed(1)}" height="${rowH - 8}" rx="2" fill="${c}"><title>${t}</title></rect>`;
+  const LO = "#ff9f6e", HI = "#5fe1ff";
+  const top = bars[0];
+  return `<figure class="lab-fig"><figcaption>Which assumptions matter most: ${s.years}-year NPV when each input moves ±25% ${ii("bizTornado")}</figcaption>
+    <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Sensitivity of NPV to each assumption">
+      ${withZero ? `<line x1="${x(0)}" x2="${x(0)}" y1="${T - 4}" y2="${H - 18}" stroke="rgba(255,255,255,0.25)" stroke-dasharray="2 3"/>` : ""}
+      <line x1="${x(base)}" x2="${x(base)}" y1="${T - 4}" y2="${H - 18}" stroke="rgba(255,255,255,0.7)"/>
+      ${bars.map((b, i) => { const y = T + i * rowH; return `<text class="tick" x="${L - 8}" y="${y + rowH / 2 + 1}" text-anchor="end">${b.label}</text>
+        ${seg(base, b.dn, y, LO, `${b.label} −25%: ${money(b.dn)}`)}${seg(base, b.up, y, HI, `${b.label} +25%: ${money(b.up)}`)}`; }).join("")}
+      <text class="tick" x="${x(base)}" y="${H - 4}" text-anchor="middle">now ${money(base)}</text>
+      ${withZero && Math.abs(x(0) - x(base)) > 60 ? `<text class="tick" x="${x(0)}" y="${H - 4}" text-anchor="middle">$0</text>` : ""}
+    </svg>
+    <div class="small muted"><i class="dot" style="background:${LO}"></i> input 25% lower · <i class="dot" style="background:${HI}"></i> input 25% higher.
+      Biggest lever: <b>${top.label.toLowerCase()}</b> (${money(Math.min(top.dn, top.up))} to ${money(Math.max(top.dn, top.up))}).
+      ${bars.length > 1 && Math.abs(bars[1].swing - top.swing) < 0.01 * top.swing ? "Bars of equal length are inputs that multiply together in the savings (voyages × season × share that complies × cost per voyage), so a 25% change in any of them moves the result by the same amount." : ""}</div>
+  </figure>`;
+}
+
 // ------------------------------------------------------------------------------------------------ formatting
 export const money = (v: number) => {
   if (!isFinite(v)) return "—";
@@ -196,13 +300,13 @@ export function controlsHtml(s: BizState): string {
   const slider = (key: string, label: string, info: string, min: number, max: number, step: number, value: number, shown: string, show = true) =>
     show ? `<label class="bz-sl"><span>${label} ${ii(info)} <b id="bzv-${key}">${shown}</b></span><input type="range" data-bs="${key}" min="${min}" max="${max}" step="${step}" value="${value}"></label>` : "";
   const ships = s.mode === "ships" || s.mode === "mix";
-  return `<div class="bz-modes seg">${modeBtns}</div>
+  return `<div class="bz-top"><div class="bz-modes seg">${modeBtns}</div>${scenarioHtml(s)}</div>
     <div class="bz-controls">
       ${slider("fleet", "Ships in the program", "bizFleet", 0, 1000, 1, fleetToSlider(s.fleet, maxFleet(s)), `${num(s.fleet)} <span class=\"muted\">of ${num(maxFleet(s))}</span>`, ships)}
       ${slider("voyagesPerShip", "California voyages per ship per year", "bizVoy", 5, 60, 1, s.voyagesPerShip, num(s.voyagesPerShip), ships)}
       ${slider("stations", "Port seafloor stations", "bizStations", 0, 10, 1, s.stations, num(s.stations), s.mode === "mix")}
       ${slider("buoys", "Moored buoys", "bizBuoys", 50, 500, 10, s.buoys, num(s.buoys), s.mode === "network")}
-      ${slider("compliance", "Voyages that would otherwise obey slow zones", "bizCompliance", 0, 100, 5, s.compliance, `${s.compliance}%`)}
+      ${slider("compliance", "Ships that obey slow zones today", "bizCompliance", 0, 100, 5, s.compliance, `${s.compliance}%`)}
     </div>`;
 }
 
@@ -226,21 +330,21 @@ export function outputHtml(s: BizState, src: string): string {
       <div class="kpi"><b>${num(r.co2Saved)} t</b><span>CO₂ avoided per year vs slow zones ${ii("bizCO2")}</span></div>
     </div>` : `<div class="bz-kpis">
       <div class="kpi bad"><b>${money(-sz.net)}</b><span>Cost to shipping per year ${ii("bizSZ")}</span></div>
-      <div class="kpi bad"><b>${num((s.regionVoyages * s.compliance / 100 * SLOW_ZONES.late) / 60)} h</b><span>Ship-hours of delay per year</span></div>
+      <div class="kpi bad"><b>${num((s.regionVoyages * s.compliance / 100 * s.season / 100 * SLOW_ZONES.late) / 60)} h</b><span>Ship-hours of delay per year</span></div>
       <div class="kpi"><b>${num(sz.whales, 1)}</b><span>Whales saved per year ${ii("bizWhales")}</span></div>
       <div class="kpi"><b>${money(sz.costPerWhale)}</b><span>Cost per whale saved ${ii("bizPerWhale")}</span></div>
     </div>`;
 
   const verdict = !isProgram
-    ? `<b>Slow zones are the baseline.</b> Nothing to build, but every complying ship loses about ${Math.round(SLOW_ZONES.late)} minutes and ${money(SLOW_ZONES.usd)} per voyage, which is why compliance is voluntary and partial. Pick another approach to see what replacing them would be worth.`
+    ? `<b>Slow zones are the baseline.</b> Nothing to build, but every complying ship loses about ${Math.round(SLOW_ZONES.late)} minutes and ${money(szOp(s).usd)} per voyage, which is why compliance is voluntary and partial. Pick another approach to see what replacing them would be worth.`
     : r.npv >= 0
       ? `<b>This pays off.</b> ${MODE_NAME[s.mode]} at this scale saves ${money(r.savings)} a year in avoided slow-downs against ${money(r.opex)} of running costs, repaying the ${money(r.capex)} set-up in ${isFinite(r.payback) ? (r.payback < 1 ? "under a year" : `${r.payback.toFixed(1)} years`) : "—"}, while saving about ${num(r.whales, 1)} whales a year.${isFinite(be) ? ` Break-even needs at least <b>${num(be)} ${s.mode === "network" ? "buoys" : "ships"}</b>.` : ""}`
-      : `<b>At this scale it doesn't pay back on savings alone.</b> ${isFinite(be) ? `It breaks even from about <b>${num(be)} ${s.mode === "network" ? "buoys" : "ships in the program"}</b>` : "It doesn't break even at any size with these assumptions"}; the fixed platform cost needs enough voyages to spread over. The whales it saves (${num(r.whales, 1)} a year) are a public benefit worth ${money(r.whales * s.whaleValue)} a year at ${money(s.whaleValue)} per whale ${ii("bizValue")}.`;
+      : `<b>At this scale it doesn't pay back on savings alone.</b> ${isFinite(be) ? `It breaks even from about <b>${num(be)} ${s.mode === "network" ? "buoys" : "ships in the program"}</b>` : "It doesn't break even at any size with these assumptions"}; ${s.mode === "mix" ? "the port stations cost more to build and run than the slow-downs they replace" : s.mode === "network" ? "servicing moored buoys at sea costs more than the slow-downs they replace" : "the fixed platform cost needs enough voyages to spread over"}. The whales it saves (${num(r.whales, 1)} a year) are a public benefit worth ${money(r.whales * s.whaleValue)} a year at ${money(s.whaleValue)} per whale ${ii("bizValue")}.`;
 
   const pl = isProgram ? `<table class="lab-tbl bz-pl"><tbody>
       <tr><td>Voyages covered per year ${TAG("calc")}</td><td>${num(r.voyages)}${s.mode === "ships" || s.mode === "mix" ? ` <span class="muted">(${num(s.fleet)} ships × ${s.voyagesPerShip})</span>` : ` <span class="muted">(all large-ship voyages in the area)</span>`}</td></tr>
-      <tr><td>Slow-zone cost avoided per voyage ${TAG("sim")}</td><td>${dollars(SLOW_ZONES.usd)} − ${r.op.usd < 0 ? `(${dollars(r.op.usd)})` : dollars(r.op.usd)} = <b>${dollars(r.savingsPerVoyage)}</b>${r.op.usd < 0 ? ` <span class="muted">(at this scale the ship's own precautions even save a little fuel)</span>` : ""}</td></tr>
-      <tr><td>Avoided slow-down costs ${TAG("calc")}<br><span class="muted">voyages × ${s.compliance}% that would comply × saving</span></td><td class="pos">+${money(r.savings)}</td></tr>
+      <tr><td>Slow-zone cost avoided per voyage ${TAG("sim")}</td><td>${dollars(szOp(s).usd)} − ${r.op.usd < 0 ? `(${dollars(r.op.usd)})` : dollars(r.op.usd)} = <b>${dollars(r.savingsPerVoyage)}</b>${r.op.usd < 0 ? ` <span class="muted">(at this scale the ship's own precautions even save a little fuel)</span>` : ""}</td></tr>
+      <tr><td>Avoided slow-down costs ${TAG("calc")}<br><span class="muted">voyages × ${s.season}% in season × ${s.compliance}% that comply × saving</span></td><td class="pos">+${money(r.savings)}</td></tr>
       ${s.mode === "ships" || s.mode === "mix" ? `<tr><td>Ship kits: servicing ${TAG("ass")}</td><td class="neg">−${money(s.fleet * s.kitOpex)}</td></tr>` : ""}
       ${s.mode === "mix" ? `<tr><td>Port stations: operations ${TAG("ass")}</td><td class="neg">−${money(s.stations * s.stationOpex)}</td></tr>` : ""}
       ${s.mode === "network" ? `<tr><td>Buoys: servicing at sea ${TAG("ass")}</td><td class="neg">−${money(s.buoys * s.buoyOpex)}</td></tr>` : ""}
@@ -267,6 +371,7 @@ export function outputHtml(s: BizState, src: string): string {
     <p class="small muted" style="margin:8px 0 0">Who pays and who benefits: ${who}. Per-voyage numbers: ${src}.</p>
     ${pl ? `<div class="sec-title">Profit and loss, per year</div>${pl}` : ""}
     ${chart}
+    ${isProgram ? `<div class="sec-title">Stress test</div>${rangeHtml(s)}${tornadoHtml(s)}` : ""}
     <div class="sec-title">All four approaches at these settings</div>${cmp}`;
 }
 
@@ -325,6 +430,8 @@ export function assumptionsHtml(s: BizState): string {
     <tr><td>Moored hydrophone buoy ${TAG("ass")} ${ii("bizBuoy")}</td><td>${inp("buoyCapex", s.buoyCapex)} + ${inp("buoyOpex", s.buoyOpex, 80)}/yr</td></tr>
     <tr><td>Data platform and operations ${TAG("ass")} ${ii("bizPlatform")}</td><td>${inp("platform", s.platform, 100)}/yr</td></tr>
     <tr><td>Horizon and discount rate ${TAG("ass")} ${ii("bizDiscount")}</td><td>${inp("years", s.years, 50)} years at ${inp("discountPct", s.discountPct, 50, "%")}</td></tr>
+    <tr><td>Value of ship time, % of $4,200/h ${TAG("ass")} ${ii("bizTime")}</td><td>${inp("szScale", s.szScale, 60, "%")} <span class="muted">→ slow zones cost ${dollars(szOp(s).usd)} per voyage</span></td></tr>
+    <tr><td>Share of voyages in slow-zone season ${TAG("res")} ${ii("bizSeason")}</td><td>${inp("season", s.season, 60, "%")}</td></tr>
     <tr><td>Ships acting on public whale positions (Buoys) ${TAG("ass")} ${ii("bizUptake")}</td><td>${inp("uptake", s.uptake, 60, "%")}</td></tr>
     <tr><td>Value of one great whale ${TAG("res")} ${ii("bizValue")}</td><td>${inp("whaleValue", s.whaleValue, 110)}</td></tr>
   </tbody></table>`;

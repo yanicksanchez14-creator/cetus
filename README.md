@@ -102,6 +102,8 @@ The **Fleet lab** button opens three tools that run voyages headless in a pool o
   Savings only count voyages that slow down today: slow zones run about May 1 to December 15 (~62% of voyages) and
   cooperation is voluntary (69.9% of distance in the San Francisco zone and 63.5% in Southern California in 2023, per
   Whale Safe), so the default is 65%.
+  A stress test shows the NPV range under Conservative / Base / Optimistic assumption sets (one click each) and a
+  sensitivity (tornado) chart of which inputs move the result most when each changes by ±25%.
 
 Click anywhere on the progress bar to **replay** the voyage; dots mark decisions, close calls and strikes, small ticks mark
 whales the ship assessed, and the encounter areas are labelled on the bar.

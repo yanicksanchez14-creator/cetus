@@ -11,6 +11,12 @@ export const INFO: Record<string, string> = {
     "Buoys only: moored hydrophone buoys along the lanes. The risk cut at each count comes from simulated voyages (50, 150, 300 and 500 buoys). Purely theoretical: hundreds of moorings would be costly to service and a hazard at sea.",
   bizCompliance:
     "The share of ships that actually slow to 10 knots in today's slow zones. California's zones are voluntary: in the 2023 season, fleet-wide cooperation was 69.9% of distance in the San Francisco zone and 63.5% in Southern California (Whale Safe / Benioff Ocean Science Lab), so 65% is the default. Only ships that slow down today lose time, so only they can save money by switching; a ship that ignores slow zones today saves nothing, though its whales are still protected. Set 100% to model mandatory zones.",
+  bizTime:
+    "What an hour of a large ship's time is worth: charter hire, crew, schedule knock-on effects and port slots. The simulation values it at $4,200/h, which puts the cost of slow zones at about $10,700 per complying voyage. Published figures vary widely by ship size and market rates, so this is an assumption; 100% = $4,200/h.",
+  bizScenario:
+    "Three sets of assumptions changed together. Conservative: 55% of ships obey slow zones, 55% of voyages in season, ship time at 75%, kit $225k + $30k/yr, stations $6M + $375k/yr, buoys $110k + $30k/yr, platform $2.25M/yr, 10% discount rate. Base: the defaults. Optimistic: 75% obey (near the ~81% of companies in the incentive program), 70% in season (as with the 2024 extension to January 15), ship time at 125%, kit $100k + $15k/yr, stations $3M + $200k/yr, buoys $50k + $15k/yr, platform $1M/yr, 5% discount rate. The program size (ships, buoys, stations) stays as you set it.",
+  bizTornado:
+    "A sensitivity (tornado) chart. Each input is moved 25% down and 25% up while everything else stays at its current value, and the NPV is recomputed. Longest bars first: those are the assumptions the answer really depends on and the ones a pilot should measure first. Percentages are capped at 100%.",
   bizSeason:
     "Slow zones are seasonal, not year-round: California asks ships to slow down from about May 1 to December 15, when blue, humpback and fin whales feed off the coast. That is about 7.5 of 12 months, so about 62% of a year's voyages fall inside the season. Voyages outside it don't slow down today, so they have nothing to save.",
   bizNPV:

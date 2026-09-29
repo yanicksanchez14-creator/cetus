@@ -10,7 +10,7 @@ import type { DepthGrid } from "../engine/bathy";
 import type { BatchReply } from "../worker/protocol";
 import type { ModeId, VoyageSummary } from "../engine/summary";
 import { ii } from "./info";
-import { CURVES, DEFAULT_BIZ, setSlowZones, controlsHtml, outputHtml, assumptionsHtml, sliderToFleet, maxFleet, money, type BizState } from "./business";
+import { CURVES, DEFAULT_BIZ, setSlowZones, controlsHtml, outputHtml, assumptionsHtml, sliderToFleet, maxFleet, money, applyScenario, type BizState, type Scenario } from "./business";
 
 const MODES: { id: ModeId; name: string; color: string }[] = [
   { id: "ships", name: "Ships", color: "#9fb3c6" },
@@ -175,25 +175,41 @@ export class FleetLab {
     const table = `<table class="lab-tbl"><thead><tr><th></th>${MODES.map((m) => `<th><i class="dot" style="background:${m.color}"></i>${m.name}</th>`).join("")}</tr></thead><tbody>
       ${rows.map((row) => {
         const vals = MODES.map((m) => got(m.id));
-        let bestId: ModeId | null = null;
-        if (done && row.best) { const ok = vals.filter(Boolean) as VoyageSummary[]; bestId = ok.sort((a, b) => row.best!(a) - row.best!(b))[0]?.mode ?? null; }
-        return `<tr><td>${row.label}${row.info ? " " + ii(row.info) : ""}</td>${vals.map((r, i) => `<td class="${r && r.mode === bestId ? "best" : ""}">${r ? row.f(r) : this.running ? `<span class="spin"></span>` : "—"}</td>`).join("")}</tr>`;
+        // highlight every mode tied for best; nothing when all are tied (no winner in that row)
+        let bestIds = new Set<ModeId>();
+        if (done && row.best) {
+          const ok = vals.filter(Boolean) as VoyageSummary[];
+          const lo = Math.min(...ok.map(row.best));
+          bestIds = new Set(ok.filter((r) => row.best!(r) - lo <= 1e-6 * Math.max(1, Math.abs(lo)) + (row.label.startsWith("Extra cost") ? 1 : 0)).map((r) => r.mode));
+          if (bestIds.size === ok.length) bestIds.clear();
+        }
+        return `<tr><td>${row.label}${row.info ? " " + ii(row.info) : ""}</td>${vals.map((r, i) => `<td class="${r && bestIds.has(r.mode) ? "best" : ""}">${r ? row.f(r) : this.running ? `<span class="spin"></span>` : "—"}</td>`).join("")}</tr>`;
       }).join("")}
     </tbody></table>`;
     let verdict = "";
     if (done) {
       const net = this.compare.filter((r) => r.mode !== "single");
-      const cheapest = [...net].sort((a, b) => a.usd - b.usd)[0];
-      const safest = [...this.compare].sort((a, b) => a.trueRiskTaken - b.trueRiskTaken)[0];
+      const minUsd = Math.min(...net.map((r) => r.usd));
+      const cheap = net.filter((r) => r.usd - minUsd <= 1);
+      const minRisk = Math.min(...this.compare.map((r) => r.trueRiskTaken));
+      const safe = this.compare.filter((r) => r.trueRiskTaken - minRisk <= 1e-9);
       const sz = got("single")!;
-      verdict = `<div class="lab-verdict"><b>What this run shows:</b> on the same whales, <b style="color:${color(cheapest.mode)}">${name(cheapest.mode)}</b> was the cheapest
-        (${usd(cheapest.usd, true)}, ${cheapest.lateMin < 1 ? "on time" : Math.round(cheapest.lateMin) + " min late"}) and <b style="color:${color(safest.mode)}">${name(safest.mode)}</b> the safest (${safest.closeTaken} close pass${safest.closeTaken === 1 ? "" : "es"} vs ${safest.closeHold} if the ship had ignored the whales).
+      const names = (rs: VoyageSummary[]) => rs.map((r) => `<b style="color:${color(r.mode)}">${name(r.mode)}</b>`).join(rs.length > 2 ? ", " : " and ").replace(/, ([^,]*)$/, " and $1");
+      const c0 = cheap[0];
+      const cheapTxt = cheap.length > 1
+        ? `${names(cheap)} tied as the cheapest (${usd(c0.usd, true)}, ${c0.lateMin < 1 ? "on time" : Math.round(c0.lateMin) + " min late"}): they located the same whales and picked the same small course shifts, so the extra distance, and cost, came out identical`
+        : `${names(cheap)} was the cheapest (${usd(c0.usd, true)}, ${c0.lateMin < 1 ? "on time" : Math.round(c0.lateMin) + " min late"})`;
+      const s0 = safe[0];
+      const safeTxt = safe.length === this.compare.length
+        ? `all four were equally safe here (${s0.closeTaken} close pass${s0.closeTaken === 1 ? "" : "es"} vs ${s0.closeHold} if the ship had ignored the whales)`
+        : `${names(safe)} ${safe.length > 1 ? "were" : "was"} the safest (${s0.closeTaken} close pass${s0.closeTaken === 1 ? "" : "es"} vs ${s0.closeHold} if the ship had ignored the whales)`;
+      verdict = `<div class="lab-verdict"><b>What this run shows:</b> on the same whales, ${cheapTxt}; ${safeTxt}.
         Slow zones cost <b>${usd(sz.usd, true)}</b> and ${Math.round(sz.lateMin)} min, because without a position the ship must slow a whole area.
         One voyage can be lucky or unlucky: <button class="linkbtn" id="labGoBatch">run many voyages</button> for averages.</div>`;
     }
     setTimeout(() => { const b = document.getElementById("labGoBatch"); if (b) b.onclick = () => { this.tab = "batch"; this.render(); }; });
     return `<p class="lab-lead">The <b>same route and the same whales</b> (seed ${s.seed}, ${s.whaleCount} whales) run in all four modes at once, in the background.
-      Nothing changes except how the whales are found. Best value in each row is highlighted.</p>
+      Nothing changes except how the whales are found. Best value in each row is highlighted (every tied mode; none when all four tie).</p>
       <div class="lab-actions">${this.running ? `<button class="btn" id="labStop">Stop</button><span class="muted small">Running 4 voyages… (~20–60 s; Buoys uses ${this.settings().sensorCount.toLocaleString()} sensors)</span>` : `<button class="btn btn-primary" id="labRunCompare">${this.compare.length ? "Run again" : "Run all 4 modes"}</button><span class="muted small">Uses your current whale count, sensors and timing error.</span>`}</div>
       ${table}${verdict}`;
   }
@@ -299,6 +315,7 @@ export class FleetLab {
     const S = this.bz;
     this.applyBatch();
     const src = this.bizSource();
+    const p1 = Math.max(21, Math.round(maxFleet(S) / 2)); // ships equipped by the end of phase 1: half the fleet serving the coast
     return `<p class="lab-lead">Would this pay off, for whom, and at what scale? Pick an approach, drag the sliders, and the model recomputes
       costs, savings, payback and whales saved. Every input is tagged and has an ⓘ.</p>
       <div class="lab-verdict how"><b>How it works.</b> The simulation supplies what one voyage costs and how much each approach cuts strike risk,
@@ -314,10 +331,10 @@ export class FleetLab {
           <ul><li>2 cabled stations in the biggest blind spot (Big Sur) + 20 volunteer ships</li><li>Budget ≈ <b>${money(2 * S.stationCapex + 20 * S.kitCapex + S.platform * 0.75)}</b></li>
           <li>KPIs: whales located per day, location error vs visual sightings, false alarms per 100 h, crew acceptance</li></ul></div>
         <div class="phase"><div class="ph-t">Phase 1 · Coast <span>months 9–24</span></div>
-          <ul><li>All 10 port stations + 150 ships on the busiest services (Mix)</li><li>Budget ≈ <b>${money(8 * S.stationCapex + 130 * S.kitCapex + 1.5 * S.platform)}</b></li>
+          <ul><li>All 10 port stations + ${p1} ships on the busiest services (Mix)</li><li>Budget ≈ <b>${money(8 * S.stationCapex + (p1 - 20) * S.kitCapex + 1.5 * S.platform)}</b></li>
           <li>KPIs: % of route where whales can be located, strikes found (strandings), savings vs slow zones per voyage</li></ul></div>
         <div class="phase"><div class="ph-t">Phase 2 · Scale <span>years 2–4</span></div>
-          <ul><li>Fleet-wide kits through the existing incentive program; share data with Whale Safe and NOAA</li><li>Budget ≈ <b>${money(Math.max(0, maxFleet(S) - 150) * S.kitCapex)}</b> + running costs</li>
+          <ul><li>Fleet-wide kits through the existing incentive program; share data with Whale Safe and NOAA</li><li>Budget ≈ <b>${money(Math.max(0, maxFleet(S) - p1) * S.kitCapex)}</b> for the other ${Math.max(0, maxFleet(S) - p1)} ships + running costs</li>
           <li>KPIs: ship participation, whale deaths per year, carrier savings, cost per whale saved</li></ul></div>
       </div>
 
@@ -362,6 +379,7 @@ export class FleetLab {
   }
 
   private wireBusiness() {
+    document.querySelectorAll<HTMLButtonElement>("[data-scen]").forEach((b) => (b.onclick = () => { this.bz = applyScenario(this.bz, b.dataset.scen as Scenario); this.bz.fleet = Math.min(this.bz.fleet, maxFleet(this.bz)); this.renderKeep(); }));
     document.querySelectorAll<HTMLButtonElement>("[data-bmode]").forEach((b) => (b.onclick = () => { this.bz.mode = b.dataset.bmode as ModeId; this.renderKeep(); }));
     document.querySelectorAll<HTMLInputElement>("[data-bs]").forEach((inp) => {
       inp.oninput = () => {

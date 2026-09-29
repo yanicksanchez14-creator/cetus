@@ -582,3 +582,9 @@ body.resizing { cursor: ew-resize; user-select: none; }
 .bz-pl td.pos { color: var(--good); }
 .bz-pl td.neg { color: #ff9aa2; }
 @media (max-width: 860px) { .bz-kpis { grid-template-columns: 1fr 1fr; } }
+.bz-top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; margin: 4px 0 10px; }
+.bz-top .bz-modes { margin: 0; }
+.bz-scen { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.bz-scen .seg { display: inline-flex; height: 30px; }
+.bz-scen .seg button { padding: 0 12px; font-weight: 600; font-size: 12px; }
+.lab-fig .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; vertical-align: 0; }
