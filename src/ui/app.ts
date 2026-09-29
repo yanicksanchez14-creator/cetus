@@ -168,7 +168,6 @@ export class App {
   private renderedDecision: Decision | null = null;
   private spotlight: { d: Decision; t0: number } | null = null;
   private bubble: { html: string; title: string; policy: boolean; until: number } | null = null;
-  private bubbleShownAt = 0;
   private seenTracks = new Set<number>();
   private summaryShown = false;
   private skipRequested = false;
@@ -846,16 +845,13 @@ export class App {
         bub.style.left = `${x}px`;
         bub.style.top = `${y}px`;
         bub.hidden = false;
-        const action = (/<span class="hl">([^<]*)<\/span>/.exec(this.bubble.html)?.[1] ?? this.bubble.title).trim();
-        // a new message (new title or action) shows in full; refreshed numbers for the same manoeuvre don't restart it
-        const key = this.bubble.title + "|" + action;
-        if (bub.dataset.key !== key) { bub.dataset.key = key; this.bubbleShownAt = now; }
-        if (bub.dataset.html !== this.bubble.html) { bub.dataset.html = this.bubble.html; $("bubbleBody").innerHTML = this.bubble.html; }
-        // after ~4 s the bubble shrinks to a small, see-through tag with just the action, so the whale stays visible
-        const compact = now - this.bubbleShownAt > 4000;
-        bub.className = `bubble${this.bubble.policy ? " policy" : ""}${compact ? " compact" : ""}`;
-        const want = compact ? action : this.bubble.title;
-        if ($("bubbleTitle").textContent !== want) $("bubbleTitle").textContent = want;
+        bub.className = `bubble${this.bubble.policy ? " policy" : ""}`;
+        const key = this.bubble.title + this.bubble.html;
+        if (bub.dataset.key !== key) {
+          bub.dataset.key = key;
+          $("bubbleTitle").textContent = this.bubble.title;
+          $("bubbleBody").innerHTML = this.bubble.html;
+        }
         $("bubbleTime").textContent = clock(s.t).slice(-5);
       }
     } else bub.hidden = true;
