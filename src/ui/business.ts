@@ -48,6 +48,8 @@ export interface BizState {
   fleet: number; // ships in the program (Ships, Mix)
   voyagesPerShip: number;
   stations: number; // Mix
+  platformPublic: boolean; // Ships/Mix: the data platform is a public service (like Whale Safe) instead of a carrier cost
+  stationsPublic: boolean; // Mix: ports / the state pay for the stations (not the carriers)
   buoys: number; // Buoys
   compliance: number; // % of voyages that would otherwise slow down in slow zones
   szScale: number; // value of ship time vs the base ($4,200/h), % (scales the slow-zone cost per voyage)
@@ -64,7 +66,7 @@ export interface BizState {
 }
 
 export const DEFAULT_BIZ: BizState = {
-  mode: "ships", fleet: 20, voyagesPerShip: 25, stations: 10, buoys: 500, compliance: 65, season: 62, szScale: 100, uptake: 90,
+  mode: "ships", fleet: 20, voyagesPerShip: 25, stations: 10, stationsPublic: true, platformPublic: false, buoys: 500, compliance: 65, season: 62, szScale: 100, uptake: 90,
   regionVoyages: 2500, deaths: 60, whaleValue: 2_000_000,
   kitCapex: 150_000, kitOpex: 20_000, stationCapex: 4_000_000, stationOpex: 250_000,
   buoyCapex: 75_000, buoyOpex: 20_000, platform: 1_500_000, years: 10, discountPct: 7,
@@ -87,7 +89,8 @@ export interface Result {
   op: Point; // per-voyage operating point
   voyages: number; // voyages a year the program covers
   share: number; // share of ships equipped (Ships, Mix)
-  capex: number; opex: number;
+  capex: number; opex: number; // paid by whoever runs the program (carriers for Ships/Mix)
+  pubCapex: number; pubOpex: number; // Mix stations when ports / the state pay (outside the carrier P&L)
   savingsPerVoyage: number; // vs complying with slow zones
   savings: number; // a year, only voyages that would have complied
   net: number; // savings - opex, a year
@@ -125,8 +128,12 @@ export function evaluate(s: BizState, mode: BizMode = s.mode): Result {
   const perShipVoy = mode === "ships" || mode === "mix";
   const voyages = mode === "single" || mode === "network" ? s.regionVoyages : Math.min(s.fleet * s.voyagesPerShip, s.regionVoyages);
   let capex = 0, opex = 0;
-  if (mode === "ships" || mode === "mix") { capex += s.fleet * s.kitCapex; opex += s.fleet * s.kitOpex + s.platform; }
-  if (mode === "mix") { capex += s.stations * s.stationCapex; opex += s.stations * s.stationOpex; }
+  let pubCapex = 0, pubOpex = 0;
+  if (mode === "ships" || mode === "mix") { capex += s.fleet * s.kitCapex; opex += s.fleet * s.kitOpex; if (s.platformPublic) pubOpex += s.platform; else opex += s.platform; }
+  if (mode === "mix") {
+    if (s.stationsPublic) { pubCapex = s.stations * s.stationCapex; pubOpex = s.stations * s.stationOpex; }
+    else { capex += s.stations * s.stationCapex; opex += s.stations * s.stationOpex; }
+  }
   if (mode === "network") { capex += s.buoys * s.buoyCapex; opex += s.buoys * s.buoyOpex + s.platform; }
   // Savings vs complying with slow zones: only voyages that would otherwise have slowed down save anything.
   // Slow zones themselves are the baseline (no savings; their cost is borne by shipping).
@@ -157,11 +164,11 @@ export function evaluate(s: BizState, mode: BizMode = s.mode): Result {
   const whales = s.deaths * op.cut * protectedShare;
   const whalesVsSZ = mode === "single" ? 0 : s.deaths * share_of_traffic * (op.cut - c * SLOW_ZONES.cut);
   const crf = i > 0 ? (i * (1 + i) ** Y) / ((1 + i) ** Y - 1) : 1 / Y;
-  const yearlyAllIn = capex * crf + opex - savings + protectionCost;
+  const yearlyAllIn = (capex + pubCapex) * crf + opex + pubOpex - savings + protectionCost; // all payers, society-wide
   const costPerWhale = whales > 0 ? yearlyAllIn / whales : NaN;
   const hoursSaved = mode === "single" ? 0 : (voyages * c * (SLOW_ZONES.late - op.late)) / 60;
   const co2Saved = mode === "single" ? 0 : voyages * c * (SLOW_ZONES.fuel - op.fuel) * 3.206;
-  return { mode, op, voyages, share, capex, opex, savingsPerVoyage, savings, net, npv, irr, payback, roi: capex > 0 ? npv / capex : NaN, whales, whalesVsSZ, costPerWhale, hoursSaved, co2Saved, cash };
+  return { mode, op, voyages, share, capex, opex, pubCapex, pubOpex, savingsPerVoyage, savings, net, npv, irr, payback, roi: capex > 0 ? npv / capex : NaN, whales, whalesVsSZ, costPerWhale, hoursSaved, co2Saved, cash };
 }
 
 /** Smallest program size with NPV >= 0 (fleet for Ships/Mix, buoys for Buoys), or NaN. */
@@ -244,7 +251,7 @@ function tornadoHtml(s: BizState): string {
     const at = (f: number) => { let v = v0 * f; if (p.pct) v = Math.min(100, v); const t = { ...s, [p.k]: v } as BizState; t.fleet = Math.min(t.fleet, maxFleet(t)); return evaluate(t).npv; };
     const dn = at(0.75), up = at(1.25);
     return { ...p, dn, up, swing: Math.abs(up - dn) };
-  }).sort((a, b) => b.swing - a.swing);
+  }).filter((b) => b.swing > 1).sort((a, b) => b.swing - a.swing);
   if (!bars.length) return "";
   const span = [base, ...bars.flatMap((b) => [b.dn, b.up])];
   const sLo = Math.min(...span), sHi = Math.max(...span);
@@ -305,6 +312,8 @@ export function controlsHtml(s: BizState): string {
       ${slider("fleet", "Ships in the program", "bizFleet", 0, 1000, 1, fleetToSlider(s.fleet, maxFleet(s)), `${num(s.fleet)} <span class=\"muted\">of ${num(maxFleet(s))}</span>`, ships)}
       ${slider("voyagesPerShip", "California voyages per ship per year", "bizVoy", 5, 60, 1, s.voyagesPerShip, num(s.voyagesPerShip), ships)}
       ${slider("stations", "Port seafloor stations", "bizStations", 0, 10, 1, s.stations, num(s.stations), s.mode === "mix")}
+      ${ships ? `<div class="bz-sl"><span>Who pays for the data platform ${ii("bizPlatFunder")}</span><div class="seg bz-fund"><button data-pfund="carrier" class="${s.platformPublic ? "" : "on"}">Carriers</button><button data-pfund="public" class="${s.platformPublic ? "on" : ""}">Public service</button></div></div>` : ""}
+      ${s.mode === "mix" ? `<div class="bz-sl"><span>Who pays for the stations ${ii("bizFunder")}</span><div class="seg bz-fund"><button data-sfund="public" class="${s.stationsPublic ? "on" : ""}">Ports &amp; state</button><button data-sfund="carrier" class="${s.stationsPublic ? "" : "on"}">Carriers</button></div></div>` : ""}
       ${slider("buoys", "Moored buoys", "bizBuoys", 50, 500, 10, s.buoys, num(s.buoys), s.mode === "network")}
       ${slider("compliance", "Ships that obey slow zones today", "bizCompliance", 0, 100, 5, s.compliance, `${s.compliance}%`)}
     </div>`;
@@ -316,7 +325,7 @@ export function outputHtml(s: BizState, src: string): string {
   const sz = evaluate(s, "single");
   const be = breakEven(s, s.mode);
   const isProgram = s.mode !== "single";
-  const who = s.mode === "network" ? "the state / a public–private consortium (public infrastructure; every ship benefits)" : s.mode === "single" ? "shipping companies (time lost) — there is no system to build" : "a carrier or a group of carriers (they buy the kits and keep the savings)";
+  const who = s.mode === "network" ? "the state / a public–private consortium (public infrastructure; every ship benefits)" : s.mode === "single" ? "shipping companies (time lost) — there is no system to build" : s.mode === "mix" && s.stationsPublic ? "carriers buy the kits and keep the savings (this P&L); ports, the state and research partners pay for the port stations as public infrastructure (shown separately)" : "a carrier or a group of carriers (they buy the kits and keep the savings)";
   const good = (v: number) => (v >= 0 ? "good" : "bad");
 
   const kpis = isProgram ? `<div class="bz-kpis">
@@ -339,18 +348,37 @@ export function outputHtml(s: BizState, src: string): string {
     ? `<b>Slow zones are the baseline.</b> Nothing to build, but every complying ship loses about ${Math.round(SLOW_ZONES.late)} minutes and ${money(szOp(s).usd)} per voyage, which is why compliance is voluntary and partial. Pick another approach to see what replacing them would be worth.`
     : r.npv >= 0
       ? `<b>This pays off.</b> ${MODE_NAME[s.mode]} at this scale saves ${money(r.savings)} a year in avoided slow-downs against ${money(r.opex)} of running costs, repaying the ${money(r.capex)} set-up in ${isFinite(r.payback) ? (r.payback < 1 ? "under a year" : `${r.payback.toFixed(1)} years`) : "—"}, while saving about ${num(r.whales, 1)} whales a year.${isFinite(be) ? ` Break-even needs at least <b>${num(be)} ${s.mode === "network" ? "buoys" : "ships"}</b>.` : ""}`
-      : `<b>At this scale it doesn't pay back on savings alone.</b> ${isFinite(be) ? `It breaks even from about <b>${num(be)} ${s.mode === "network" ? "buoys" : "ships in the program"}</b>` : "It doesn't break even at any size with these assumptions"}; ${s.mode === "mix" ? "the port stations cost more to build and run than the slow-downs they replace" : s.mode === "network" ? "servicing moored buoys at sea costs more than the slow-downs they replace" : "the fixed platform cost needs enough voyages to spread over"}. The whales it saves (${num(r.whales, 1)} a year) are a public benefit worth ${money(r.whales * s.whaleValue)} a year at ${money(s.whaleValue)} per whale ${ii("bizValue")}.`;
+      : `<b>At this scale it doesn't pay back on savings alone.</b> ${isFinite(be) ? `It breaks even from about <b>${num(be)} ${s.mode === "network" ? "buoys" : "ships in the program"}</b>` : "It doesn't break even at any size with these assumptions"}; ${s.mode === "mix" && !s.stationsPublic ? "the port stations cost more to build and run than the slow-downs they replace" : s.mode === "network" ? "servicing moored buoys at sea costs more than the slow-downs they replace" : "the fixed platform cost needs enough voyages to spread over"}. The whales it saves (${num(r.whales, 1)} a year) are a public benefit worth ${money(r.whales * s.whaleValue)} a year at ${money(s.whaleValue)} per whale ${ii("bizValue")}.`;
 
+  let perShip = "";
+  if ((s.mode === "ships" || s.mode === "mix") && s.fleet > 0) {
+    const sav = r.savings / s.fleet, plat = s.platformPublic ? 0 : s.platform / s.fleet, netShip = sav - s.kitOpex - plat;
+    const perVoy = r.voyages ? r.savings / r.voyages : 0;
+    const big = Math.min(maxFleet(s), Math.max(s.fleet * 3, 60)), platBig = s.platformPublic ? 0 : s.platform / big;
+    perShip = `<div class="bz-ship"><b>Per equipped ship, per year:</b> saves <b class="pos">${money(sav)}</b> <span class="muted">(${s.voyagesPerShip} voyages × ${s.season}% in slow-zone season × ${s.compliance}% that would slow down × ${money(r.savingsPerVoyage)} ≈ ${money(perVoy)} a voyage on average)</span>,
+      minus ${money(s.kitOpex)} kit servicing${s.platformPublic ? "" : ` and a <b>${money(plat)}</b> share of the data platform`} = <b class="${netShip >= 0 ? "pos" : "neg"}">${money(netShip)}</b> a year,
+      so the ${money(s.kitCapex)} kit ${netShip > 0 ? `repays in about <b>${(s.kitCapex / netShip).toFixed(1)} years</b> (before discounting)` : "never repays"}.
+      ${!s.platformPublic && plat > 0.3 * sav && big > s.fleet ? `The platform is the drag at this size: with ${num(big)} ships its share drops to ${money(platBig)} a ship${sav - s.kitOpex - platBig > 0 ? ` and the kit repays in ${(s.kitCapex / (sav - s.kitOpex - platBig)).toFixed(1)} years` : ""}.` : ""}</div>`;
+  }
+  let publicNote = "";
+  if (s.mode === "mix" && s.stationsPublic && s.stations > 0) {
+    const sh = evaluate(s, "ships"), i = s.discountPct / 100, Y = Math.max(1, Math.round(s.years));
+    const crf = i > 0 ? (i * (1 + i) ** Y) / ((1 + i) ** Y - 1) : 1 / Y;
+    const pubYear = r.pubCapex * crf + r.pubOpex, extra = r.whales - sh.whales;
+    publicNote = `<div class="lab-verdict pub"><b>Public side.</b> For the carriers, Mix is nearly the same deal as Ships (NPV ${money(r.npv)} vs ${money(sh.npv)}): they pay for the same kits and keep the same savings. The ${s.stations} port stations are paid by ports and the state: ${money(pubYear)} a year with the set-up spread over ${Y} years. They save about <b>${num(extra, 1)} more whales a year</b> than Ships alone${extra > 0.05 ? `, so <b>${money(pubYear / extra)} per extra whale</b>, against a value of ${money(s.whaleValue)} per whale ${ii("bizValue")}` : ""}. The stations matter most while few ships are equipped, because they fill the blind spots.</div>`;
+  }
   const pl = isProgram ? `<table class="lab-tbl bz-pl"><tbody>
       <tr><td>Voyages covered per year ${TAG("calc")}</td><td>${num(r.voyages)}${s.mode === "ships" || s.mode === "mix" ? ` <span class="muted">(${num(s.fleet)} ships × ${s.voyagesPerShip})</span>` : ` <span class="muted">(all large-ship voyages in the area)</span>`}</td></tr>
       <tr><td>Slow-zone cost avoided per voyage ${TAG("sim")}</td><td>${dollars(szOp(s).usd)} − ${r.op.usd < 0 ? `(${dollars(r.op.usd)})` : dollars(r.op.usd)} = <b>${dollars(r.savingsPerVoyage)}</b>${r.op.usd < 0 ? ` <span class="muted">(at this scale the ship's own precautions even save a little fuel)</span>` : ""}</td></tr>
       <tr><td>Avoided slow-down costs ${TAG("calc")}<br><span class="muted">voyages × ${s.season}% in season × ${s.compliance}% that comply × saving</span></td><td class="pos">+${money(r.savings)}</td></tr>
       ${s.mode === "ships" || s.mode === "mix" ? `<tr><td>Ship kits: servicing ${TAG("ass")}</td><td class="neg">−${money(s.fleet * s.kitOpex)}</td></tr>` : ""}
-      ${s.mode === "mix" ? `<tr><td>Port stations: operations ${TAG("ass")}</td><td class="neg">−${money(s.stations * s.stationOpex)}</td></tr>` : ""}
+      ${s.mode === "mix" && !s.stationsPublic ? `<tr><td>Port stations: operations ${TAG("ass")}</td><td class="neg">−${money(s.stations * s.stationOpex)}</td></tr>` : ""}
       ${s.mode === "network" ? `<tr><td>Buoys: servicing at sea ${TAG("ass")}</td><td class="neg">−${money(s.buoys * s.buoyOpex)}</td></tr>` : ""}
-      <tr><td>Data platform and operations ${TAG("ass")}</td><td class="neg">−${money(s.platform)}</td></tr>
+      ${s.mode === "network" || !s.platformPublic ? `<tr><td>Data platform and operations ${TAG("ass")}</td><td class="neg">−${money(s.platform)}</td></tr>` : ""}
       <tr class="sum"><td>Net benefit per year</td><td class="${r.net >= 0 ? "pos" : "neg"}"><b>${r.net >= 0 ? "+" : ""}${money(r.net)}</b></td></tr>
-      <tr><td>One-time set-up ${TAG("ass")}</td><td class="neg">−${money(r.capex)} <span class="muted">${s.mode === "network" ? `${num(s.buoys)} buoys` : `${num(s.fleet)} kits${s.mode === "mix" ? ` + ${s.stations} stations` : ""}`}</span></td></tr>
+      <tr><td>One-time set-up ${TAG("ass")}</td><td class="neg">−${money(r.capex)} <span class="muted">${s.mode === "network" ? `${num(s.buoys)} buoys` : `${num(s.fleet)} kits${s.mode === "mix" && !s.stationsPublic ? ` + ${s.stations} stations` : ""}`}</span></td></tr>
+      ${(s.mode === "ships" || s.mode === "mix") && s.platformPublic ? `<tr class="pub"><td>Data platform, run as a public service ${TAG("ass")}<br><span class="muted">not in the carriers' P&L</span></td><td>${money(s.platform)}/yr</td></tr>` : ""}
+      ${s.mode === "mix" && s.stationsPublic && s.stations > 0 ? `<tr class="pub"><td>Port stations, paid by ports and the state ${TAG("ass")}<br><span class="muted">not in the carriers' P&L</span></td><td>${money(r.pubCapex)} set-up + ${money(r.pubOpex)}/yr <span class="muted">(${s.stations} stations)</span></td></tr>` : ""}
       <tr><td>Strike-risk cut at this scale ${TAG("sim")}</td><td>${pct(r.op.cut)}${s.mode === "ships" || s.mode === "mix" ? ` <span class="muted">(${pct(r.share)} of ships equipped)</span>` : ""} <span class="muted">vs ${pct(SLOW_ZONES.cut)} with slow zones</span></td></tr>
     </tbody></table>` : "";
 
@@ -358,7 +386,7 @@ export function outputHtml(s: BizState, src: string): string {
 
   const all = (["ships", "mix", "network", "single"] as BizMode[]).map((m) => ({ m, r: evaluate(s, m) }));
   const cmp = `<table class="lab-tbl"><thead><tr><th>At these settings</th>${all.map(({ m }) => `<th><i class="dot" style="background:${MODE_COLOR[m]}"></i>${MODE_NAME[m]}</th>`).join("")}</tr></thead><tbody>
-      <tr><td>Set-up</td>${all.map(({ r }) => `<td>${money(r.capex)}</td>`).join("")}</tr>
+      <tr><td>Set-up</td>${all.map(({ r }) => `<td>${money(r.capex)}${r.pubCapex ? ` <span class="muted">+ ${money(r.pubCapex)} public</span>` : ""}</td>`).join("")}</tr>
       <tr><td>Net per year</td>${all.map(({ r }) => `<td>${money(r.net)}</td>`).join("")}</tr>
       <tr><td>NPV, ${s.years} years</td>${all.map(({ m, r }) => `<td>${m === "single" ? "—" : money(r.npv)}</td>`).join("")}</tr>
       <tr><td>Strike-risk cut</td>${all.map(({ r }) => `<td>${pct(r.op.cut)}</td>`).join("")}</tr>
@@ -367,7 +395,7 @@ export function outputHtml(s: BizState, src: string): string {
     </tbody></table>`;
 
   return `${kpis}
-    <div class="lab-verdict">${verdict}</div>
+    <div class="lab-verdict">${verdict}</div>${perShip}${publicNote}
     <p class="small muted" style="margin:8px 0 0">Who pays and who benefits: ${who}. Per-voyage numbers: ${src}.</p>
     ${pl ? `<div class="sec-title">Profit and loss, per year</div>${pl}` : ""}
     ${chart}

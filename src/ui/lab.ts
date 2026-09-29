@@ -379,6 +379,8 @@ export class FleetLab {
   }
 
   private wireBusiness() {
+    document.querySelectorAll<HTMLButtonElement>("[data-pfund]").forEach((b) => (b.onclick = () => { this.bz.platformPublic = b.dataset.pfund === "public"; this.renderKeep(); }));
+    document.querySelectorAll<HTMLButtonElement>("[data-sfund]").forEach((b) => (b.onclick = () => { this.bz.stationsPublic = b.dataset.sfund === "public"; this.renderKeep(); }));
     document.querySelectorAll<HTMLButtonElement>("[data-scen]").forEach((b) => (b.onclick = () => { this.bz = applyScenario(this.bz, b.dataset.scen as Scenario); this.bz.fleet = Math.min(this.bz.fleet, maxFleet(this.bz)); this.renderKeep(); }));
     document.querySelectorAll<HTMLButtonElement>("[data-bmode]").forEach((b) => (b.onclick = () => { this.bz.mode = b.dataset.bmode as ModeId; this.renderKeep(); }));
     document.querySelectorAll<HTMLInputElement>("[data-bs]").forEach((inp) => {

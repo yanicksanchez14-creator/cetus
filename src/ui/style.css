@@ -588,3 +588,9 @@ body.resizing { cursor: ew-resize; user-select: none; }
 .bz-scen .seg { display: inline-flex; height: 30px; }
 .bz-scen .seg button { padding: 0 12px; font-weight: 600; font-size: 12px; }
 .lab-fig .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; vertical-align: 0; }
+.bz-fund { display: inline-flex; height: 28px; align-self: flex-start; }
+.bz-fund button { padding: 0 12px; font-size: 12px; font-weight: 600; }
+.lab-verdict.pub { margin-top: 8px; border-color: rgba(94, 240, 164, 0.35); }
+.bz-pl tr.pub td { color: var(--muted); }
+.bz-ship { margin-top: 8px; padding: 10px 14px; border: 1px dashed var(--line); border-radius: 12px; font-size: 13px; line-height: 1.55; }
+.bz-ship .pos { color: var(--good); } .bz-ship .neg { color: var(--bad); }
