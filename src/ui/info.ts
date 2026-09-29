@@ -10,7 +10,9 @@ export const INFO: Record<string, string> = {
   bizBuoys:
     "Buoys only: moored hydrophone buoys along the lanes. The risk cut at each count comes from simulated voyages (50, 150, 300 and 500 buoys). Purely theoretical: hundreds of moorings would be costly to service and a hazard at sea.",
   bizCompliance:
-    "The share of voyages that would otherwise slow down for slow zones. Only those voyages save money by switching to targeted steering; a ship that ignores slow zones today saves nothing (but its whales are still protected). California's zones are voluntary and cooperation is partial, so 70% is an assumption; set 100% to model mandatory zones.",
+    "The share of ships that actually slow to 10 knots in today's slow zones. California's zones are voluntary: in the 2023 season, fleet-wide cooperation was 69.9% of distance in the San Francisco zone and 63.5% in Southern California (Whale Safe / Benioff Ocean Science Lab), so 65% is the default. Only ships that slow down today lose time, so only they can save money by switching; a ship that ignores slow zones today saves nothing, though its whales are still protected. Set 100% to model mandatory zones.",
+  bizSeason:
+    "Slow zones are seasonal, not year-round: California asks ships to slow down from about May 1 to December 15, when blue, humpback and fin whales feed off the coast. That is about 7.5 of 12 months, so about 62% of a year's voyages fall inside the season. Voyages outside it don't slow down today, so they have nothing to save.",
   bizNPV:
     "Net present value: the set-up cost now, plus each year's net benefit discounted back to today at the discount rate, over the horizon. Above $0 means the program earns more than the money would elsewhere.",
   bizNet:
@@ -26,7 +28,7 @@ export const INFO: Record<string, string> = {
   bizCO2:
     "Fuel burned vs complying with slow zones, × 3.206 t CO₂ per t of fuel. Slow zones save fuel in the zone but make ships speed up (up to 19 kn) to recover lost time, which usually costs more.",
   bizSZ:
-    "Every complying voyage loses time (valued at $4,200/h) and some net fuel in each slow zone it meets. Total = voyages × share that complies × simulated cost per voyage.",
+    "Every complying voyage loses time (valued at $4,200/h) and some net fuel in each slow zone it meets. Total = voyages × share in slow-zone season × share that complies × simulated cost per voyage.",
   bizValue:
     "A great whale's lifetime economic value, mostly from the carbon it helps capture plus tourism and fishing benefits: about $2 million (Chami et al., IMF, 2019). Used only to express whales saved in dollars; it's not in the NPV.",
   bizCash:

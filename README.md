@@ -99,6 +99,9 @@ The **Fleet lab** button opens three tools that run voyages headless in a pool o
   cost per whale, delay hours and CO2 avoided, a P&L, a cumulative-cash chart and the break-even program size. How well
   Ships and Mix work with only part of the fleet equipped, and Buoys with fewer buoys, comes from simulated voyages at
   those sizes (real AIS traffic). Every input is tagged research / simulation / assumption / calculated and editable.
+  Savings only count voyages that slow down today: slow zones run about May 1 to December 15 (~62% of voyages) and
+  cooperation is voluntary (69.9% of distance in the San Francisco zone and 63.5% in Southern California in 2023, per
+  Whale Safe), so the default is 65%.
 
 Click anywhere on the progress bar to **replay** the voyage; dots mark decisions, close calls and strikes, small ticks mark
 whales the ship assessed, and the encounter areas are labelled on the bar.
