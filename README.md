@@ -38,9 +38,9 @@ Cetus asks a simple question: **if we knew where each whale was, how much cheape
 |---|---|---|
 | What the ship knows | Whale position ± tens to hundreds of metres, plus a forecast | "A whale is within \~20–100 km of this buoy" |
 | Typical response | Keep 16 kn, steer 1–2 km around the whale (slow down only for groups or late finds) | 10 kn for \~50 km |
-| Extra cost per voyage* | **\~$150** (Buoys), \~$110 (Ships), \~$110 (Mix) | **\~$10.7k**, \~1.4 h late even after catching up |
-| Strike-risk cut vs ignoring whales* | **\~95%** with Buoys (500 buoys); \~85% with ships alone, \~82% with ships + port stations (a gap within the noise of 120 voyages) | **\~84%** (slower hits are less deadly, at a high price) |
-| Share of a normal trip (\~$224k) | \~0.05–0.07% | \~5% |
+| Extra cost per voyage* | **\~$155** (Buoys), \~$60 (Ships), \~$60 (Mix) | **\~$10.7k**, \~1.4 h late even after catching up |
+| Strike-risk cut vs ignoring whales* | **\~95%** with Buoys (500 buoys); \~75% with ships alone, \~77% with ships + port stations | **\~84%** (slower hits are less deadly, at a high price) |
+| Share of a normal trip (\~$224k) | \~0.03–0.07% | \~5% |
 
 \*Oakland → Long Beach, 120 random voyages per mode with 8 whales: each strike hotspot (Farallones, Big Sur, Santa Barbara
 Channel) gets a whale \~85% of the time (random spot ±25 km along the lane, random time ±25 min), plus 5 more whales. Risk cut
@@ -94,8 +94,11 @@ The **Fleet lab** button opens three tools that run voyages headless in a pool o
 - **Compare modes**: the same whales in Ships, Mix, Buoys and Slow zones, side by side.
 - **Many voyages**: 10–50 voyages per mode with new random whales; averages, ranges and a fair hindsight safety measure
   (true whales passed within 500 m, weighted by lethality at speed, vs a ship that ignored them).
-- **Business case**: yearly system and shipping costs, whales saved, cost per whale, what a carrier saves vs slow zones,
-  kit payback, a phased rollout plan, and every assumption editable.
+- **Business case**: pick an approach and drag sliders (ships in the program, voyages per ship, port stations, buoys,
+  how many ships would otherwise obey slow zones) to get NPV, yearly net benefit, discounted payback, IRR, whales saved,
+  cost per whale, delay hours and CO2 avoided, a P&L, a cumulative-cash chart and the break-even program size. How well
+  Ships and Mix work with only part of the fleet equipped, and Buoys with fewer buoys, comes from simulated voyages at
+  those sizes (real AIS traffic). Every input is tagged research / simulation / assumption / calculated and editable.
 
 Click anywhere on the progress bar to **replay** the voyage; dots mark decisions, close calls and strikes, small ticks mark
 whales the ship assessed, and the encounter areas are labelled on the bar.

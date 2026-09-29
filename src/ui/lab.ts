@@ -10,6 +10,7 @@ import type { DepthGrid } from "../engine/bathy";
 import type { BatchReply } from "../worker/protocol";
 import type { ModeId, VoyageSummary } from "../engine/summary";
 import { ii } from "./info";
+import { CURVES, DEFAULT_BIZ, setSlowZones, controlsHtml, outputHtml, assumptionsHtml, sliderToFleet, maxFleet, money, type BizState } from "./business";
 
 const MODES: { id: ModeId; name: string; color: string }[] = [
   { id: "ships", name: "Ships", color: "#9fb3c6" },
@@ -32,14 +33,6 @@ const usdK = (v: number) => {
 const mean = (a: number[]) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : NaN);
 const q = (a: number[], f: number) => { const s = [...a].sort((x, y) => x - y); return s.length ? s[Math.min(s.length - 1, Math.max(0, Math.round(f * (s.length - 1))))] : NaN; };
 
-/** Reference results (120 voyages per mode, 8 whales, precaution = slow) used until you run your own batch. */
-const REFERENCE: Record<ModeId, { usd: number; lateMin: number; riskHold: number; riskTaken: number }> = {
-  // riskHold / riskTaken: close passes (<500 m) weighted by lethality at speed, per voyage (hindsight, true whales)
-  ships: { usd: 113, lateMin: 5, riskHold: 0.442, riskTaken: 0.064 },
-  mix: { usd: 111, lateMin: 4, riskHold: 0.442, riskTaken: 0.079 },
-  network: { usd: 155, lateMin: 3, riskHold: 0.442, riskTaken: 0.024 }, // 500 buoys
-  single: { usd: 10698, lateMin: 86, riskHold: 0.442, riskTaken: 0.070 },
-};
 
 export interface LabSettings { seed: number; whaleCount: number; sensorCount: number; sigmaMs: number; routeId: string }
 
@@ -56,13 +49,7 @@ export class FleetLab {
   private batch: VoyageSummary[] = [];
   private batchN = 10;
   private running = false;
-  private biz = {
-    voyages: 2500, deathsNoProtection: 60, whaleValue: 2_000_000, years: 10, discountPct: 7,
-    fleetShips: 1000, adoption: { ships: 100, mix: 100, network: 100, single: 85 } as Record<ModeId, number>,
-    buoyCapex: 75_000, buoyOpex: 20_000, stationCapex: 4_000_000, stationOpex: 250_000,
-    kitCapex: 150_000, kitOpex: 20_000, opsCenter: 1_500_000,
-    coShips: 20, coVoyages: 25,
-  };
+  private bz: BizState = { ...DEFAULT_BIZ };
 
   constructor(private grids: () => DepthGrid[], private settings: () => LabSettings) {}
 
@@ -134,6 +121,7 @@ export class FleetLab {
     else if (this.tab === "batch") body.innerHTML = this.batchHtml();
     else body.innerHTML = this.businessHtml();
     this.wire();
+    if (this.tab === "business") this.wireBusiness();
   }
 
   private wire() {
@@ -146,18 +134,6 @@ export class FleetLab {
     document.querySelectorAll<HTMLButtonElement>("[data-n]").forEach((b) => (b.onclick = () => { this.batchN = Number(b.dataset.n); this.render(); }));
     const toBiz = document.getElementById("labToBiz");
     if (toBiz) toBiz.onclick = () => { this.tab = "business"; this.render(); };
-    document.querySelectorAll<HTMLInputElement>("[data-biz]").forEach((inp) => {
-      inp.onchange = () => {
-        const k = inp.dataset.biz!;
-        const v = Number(inp.value.replace(/[$,%\s]/g, ""));
-        if (!isFinite(v) || v < 0) return;
-        if (k.startsWith("adopt.")) this.biz.adoption[k.slice(6) as ModeId] = Math.min(v, 100);
-        else (this.biz as unknown as Record<string, number>)[k] = v;
-        const y = document.getElementById("labBody")!.scrollTop;
-        this.render();
-        document.getElementById("labBody")!.scrollTop = y;
-      };
-    });
   }
 
   // ---------------------------------------------------------------- compare
@@ -255,7 +231,7 @@ export class FleetLab {
     const u = rs.map((r) => r.usd);
     return {
       n: rs.length, usd: mean(u), p10: q(u, 0.1), p90: q(u, 0.9), min: Math.min(...u), max: Math.max(...u),
-      late: mean(rs.map((r) => r.lateMin)), lateMax: Math.max(...rs.map((r) => r.lateMin)),
+      late: mean(rs.map((r) => r.lateMin)), fuel: mean(rs.map((r) => r.fuelDeltaT)), lateMax: Math.max(...rs.map((r) => r.lateMin)),
       riskHold: mean(rs.map((r) => r.trueRiskHold)), riskTaken: mean(rs.map((r) => r.trueRiskTaken)),
       close: mean(rs.map((r) => r.closeTaken)), closeHold: mean(rs.map((r) => r.closeHold)),
       strikes: rs.reduce((a, r) => a + r.strikes, 0), lethal: rs.reduce((a, r) => a + r.lethalStrikes, 0),
@@ -317,128 +293,103 @@ export class FleetLab {
   }
 
   // ---------------------------------------------------------------- business case
-  private perVoyage(m: ModeId) {
-    const s = this.stats(m);
-    if (s && s.n >= 3) return { usd: s.usd, lateMin: s.late, riskHold: s.riskHold, riskTaken: s.riskTaken, src: `your ${s.n}-voyage batch` };
-    return { ...REFERENCE[m], src: "reference runs, 120 voyages per mode" };
-  }
+
 
   private businessHtml(): string {
-    const B = this.biz;
-    const inp = (k: string, v: number, suffix = "", w = 90) => `<input class="lab-in" data-biz="${k}" value="${v.toLocaleString("en-US")}${suffix}" style="width:${w}px">`;
-    const pv = Object.fromEntries(MODES.map((m) => [m.id, this.perVoyage(m.id)])) as Record<ModeId, ReturnType<FleetLab["perVoyage"]>>;
-    const src = pv.network.src;
-    // system cost per mode (what must be built and run)
-    const stations = 10;
-    const sys: Record<ModeId, { setup: number; yearly: number; what: string }> = {
-      ships: { setup: B.fleetShips * B.kitCapex, yearly: B.fleetShips * B.kitOpex + B.opsCenter, what: `${B.fleetShips.toLocaleString()} ship kits (towed hydrophone + thermal camera) + data center` },
-      mix: { setup: B.fleetShips * B.kitCapex + stations * B.stationCapex, yearly: B.fleetShips * B.kitOpex + stations * B.stationOpex + B.opsCenter, what: `ship kits + ${stations} cabled port stations + data center` },
-      network: { setup: 500 * B.buoyCapex, yearly: 500 * B.buoyOpex + B.opsCenter, what: "500 moored buoys + data center" },
-      single: { setup: 0, yearly: 0, what: "existing buoys and voluntary program (already running)" },
-    };
-    const i = B.discountPct / 100, n = Math.max(1, B.years);
-    const crf = i > 0 ? (i * (1 + i) ** n) / ((1 + i) ** n - 1) : 1 / n;
-    const rows = MODES.map((m) => {
-      const p = pv[m.id];
-      const adopt = B.adoption[m.id] / 100;
-      const cut = p.riskHold > 0 ? Math.max(0, 1 - p.riskTaken / p.riskHold) : 0;
-      const saved = B.deathsNoProtection * cut * adopt;
-      const protection = B.voyages * adopt * p.usd; // what ships spend on slowing/steering
-      const lateH = (B.voyages * adopt * p.lateMin) / 60;
-      // setup cost turned into an equal yearly payment over its life, including the cost of the money (capital recovery factor)
-      const annualized = sys[m.id].setup * crf + sys[m.id].yearly;
-      const total = annualized + protection;
-      return { m, p, cut, saved, protection, lateH, annualized, total, perWhale: saved > 0 ? total / saved : NaN, benefit: saved * B.whaleValue - total };
-    });
-    const sz = rows.find((r) => r.m.id === "single")!;
-    const best = rows.filter((r) => r.m.id !== "single").sort((a, b) => a.total - b.total)[0];
-    // company view
-    const coVoy = B.coShips * B.coVoyages;
-    const co = (id: ModeId) => coVoy * pv[id].usd;
-    const coSZ = co("single"), coShips = co("ships");
-    const coKitSetup = B.coShips * B.kitCapex, coKitYear = B.coShips * B.kitOpex;
-    const coSave = coSZ - coShips - coKitYear;
-    // discounted payback: months until the monthly savings, discounted at the same rate, repay the kit
-    const im = (1 + i) ** (1 / 12) - 1, Sm = coSave / 12;
-    const payback = coSave <= 0 ? NaN : im <= 0 ? coKitSetup / Sm : coKitSetup * im >= Sm ? NaN : -Math.log(1 - (coKitSetup * im) / Sm) / Math.log(1 + im);
+    const S = this.bz;
+    this.applyBatch();
+    const src = this.bizSource();
+    return `<p class="lab-lead">Would this pay off, for whom, and at what scale? Pick an approach, drag the sliders, and the model recomputes
+      costs, savings, payback and whales saved. Every input is tagged and has an ⓘ.</p>
+      <div class="lab-verdict how"><b>How it works.</b> The simulation supplies what one voyage costs and how much each approach cuts strike risk,
+        measured at several program sizes (share of ships equipped, number of buoys). The model scales that to California: voyages a year,
+        who would otherwise slow down for slow zones, equipment and running costs. Savings are what ships no longer lose to slow zones.
+        Tags: ${this.tag("res")} published figure, ${this.tag("sim")} from the simulation, ${this.tag("ass")} my estimate (edit it below), ${this.tag("calc")} computed.</div>
+      <div id="bzControls">${controlsHtml(S)}</div>
+      <div id="bzOut">${outputHtml(S, src)}</div>
 
-    const T = (k: "sim" | "res" | "ass" | "calc") => `<span class="stag ${k}">${{ sim: "simulation", res: "research", ass: "assumption", calc: "calculated" }[k]}</span>`;
-    const tbl = `<table class="lab-tbl biz"><thead><tr><th>Per year, California</th>${MODES.map((m) => `<th><i class="dot" style="background:${m.color}"></i>${m.name}</th>`).join("")}</tr></thead><tbody>
-      <tr><td>Extra cost per voyage ${T("sim")}<br><span class="muted">${src}</span></td>${rows.map((r) => `<td>${usd(r.p.usd, true)}</td>`).join("")}</tr>
-      <tr><td>Ships taking part ${T("ass")}<br><span class="muted">85% for slow zones: Santa Barbara Channel fleet cooperation (2024 data)</span></td>${MODES.map((m) => `<td>${inp(`adopt.${m.id}`, B.adoption[m.id], "%", 56)}</td>`).join("")}</tr>
-      <tr><td>Setup cost (one-time) ${T("ass")}</td>${rows.map((r) => `<td>${usdK(sys[r.m.id].setup)}</td>`).join("")}</tr>
-      <tr><td>System running cost ${T("ass")}</td>${rows.map((r) => `<td>${usdK(sys[r.m.id].yearly)}</td>`).join("")}</tr>
-      <tr><td>Cost to shipping (slowing, steering, delays) ${T("calc")}<br><span class="muted">voyages × extra cost per voyage</span></td>${rows.map((r) => `<td>${usdK(r.protection)}<br><span class="muted">${Math.round(r.lateH).toLocaleString()} ship-hours late</span></td>`).join("")}</tr>
-      <tr class="sum"><td>Total cost per year ${T("calc")}<br><span class="muted">setup paid off over ${B.years} yrs at ${B.discountPct}% + running + shipping</span></td>${rows.map((r) => `<td><b>${usdK(r.total)}</b></td>`).join("")}</tr>
-      <tr><td>Strike risk cut ${T("sim")}</td>${rows.map((r) => `<td>${Math.round(r.cut * 100)}%</td>`).join("")}</tr>
-      <tr class="sum"><td>Whales saved per year ${T("calc")}<br><span class="muted">deaths × risk cut × ships taking part</span></td>${rows.map((r) => `<td><b>${r.saved.toFixed(0)}</b> <span class="muted">of ${B.deathsNoProtection}</span></td>`).join("")}</tr>
-      <tr><td>Cost per whale saved ${T("calc")}</td>${rows.map((r) => `<td>${isFinite(r.perWhale) ? usdK(r.perWhale) : "—"}</td>`).join("")}</tr>
-    </tbody></table>`;
-
-    return `<p class="lab-lead">What would each approach cost California per year, who pays, and what does a shipping company save?
-      Edit any white box.</p>
-      <div class="lab-verdict how"><b>How the numbers fit together.</b> Nothing here is one ship multiplied up. Two numbers come from the simulation:
-        each mode's <b>extra cost per voyage</b> and how much it <b>cuts strike risk</b>. They're applied to real-world scale:
-        <b>~2,500 large-ship transits a year</b> through the Santa Barbara Channel, and a baseline of <b>60 whale deaths a year</b> in California
-        (an estimated ~83 are killed off the whole US West Coast in July–December alone). So "whales saved" can never exceed 60. Each number is tagged:
-        ${T("res")} published figure, ${T("sim")} from this simulation, ${T("ass")} my estimate (change it), ${T("calc")} computed from the others.</div>
-
-      <div class="biz-kpis">
-        <div class="kpi"><b>${usdK(sz.protection - best.protection)}</b><span>saved by shipping each year with ${best.m.name} vs slow zones</span></div>
-        <div class="kpi"><b>${Math.round(sz.lateH - best.lateH).toLocaleString()} h</b><span>fewer hours of delay across the fleet</span></div>
-        <div class="kpi"><b>${Math.abs(best.saved - sz.saved).toFixed(0)}</b><span>${best.saved >= sz.saved ? "more" : "fewer"} whales saved per year than slow zones (${best.m.name}: ${best.saved.toFixed(0)} vs ${sz.saved.toFixed(0)})</span></div>
-        <div class="kpi"><b>${isFinite(best.perWhale) ? usdK(best.perWhale) : "—"}</b><span>cost per whale saved with ${best.m.name} (all-in)</span></div>
-      </div>
-
-      <div class="sec-title">1 · The whole system, per year</div>
-      ${tbl}
-      <p class="small muted">Setup: ${MODES.map((m) => `<b>${m.name}</b> = ${sys[m.id].what}`).join(" · ")}.</p>
-
-      <div class="sec-title">2 · For a shipping company</div>
-      <p class="small">A carrier with ${inp("coShips", B.coShips, "", 60)} ships, each making ${inp("coVoyages", B.coVoyages, "", 60)} California voyages a year (${coVoy.toLocaleString()} voyages):</p>
-      <table class="lab-tbl"><tbody>
-        <tr><td>Complying with slow zones</td><td><b>${usdK(coSZ)}</b> a year · ${Math.round((coVoy * pv.single.lateMin) / 60).toLocaleString()} hours late</td></tr>
-        <tr><td>Steering around located whales (Ships)</td><td><b>${usdK(coShips)}</b> a year · ${Math.round((coVoy * pv.ships.lateMin) / 60).toLocaleString()} hours late</td></tr>
-        <tr><td>Fitting its ships with the kit</td><td>${usdK(coKitSetup)} once + ${usdK(coKitYear)} a year</td></tr>
-        <tr class="sum"><td>Net saving per year</td><td style="color:${coSave >= 0 ? "var(--good)" : "var(--bad)"}"><b>${usdK(coSave)}</b>${isFinite(payback) ? ` · <b>kit pays back in ~${payback < 1 ? "<1" : Math.round(payback)} months</b>` : " · the kit does not pay back on slow-zone savings alone"}</td></tr>
-      </table>
-      <p class="small muted">Beyond fuel: fewer delays mean more reliable berth windows, and carriers already compete on sustainability rankings (the Protecting Blue Whales and Blue Skies program publicly ranks companies).</p>
-
-      <div class="sec-title">3 · Rollout plan</div>
+      <div class="sec-title">Rollout plan</div>
       <div class="phases">
         <div class="phase"><div class="ph-t">Phase 0 · Pilot <span>months 0–9</span></div>
-          <ul><li>2 cabled stations in the biggest blind spot (Big Sur) + 20 volunteer ships</li><li>Budget ≈ <b>${usdK(2 * B.stationCapex + 20 * B.kitCapex + B.opsCenter * 0.75)}</b></li>
+          <ul><li>2 cabled stations in the biggest blind spot (Big Sur) + 20 volunteer ships</li><li>Budget ≈ <b>${money(2 * S.stationCapex + 20 * S.kitCapex + S.platform * 0.75)}</b></li>
           <li>KPIs: whales located per day, location error vs visual sightings, false alarms per 100 h, crew acceptance</li></ul></div>
         <div class="phase"><div class="ph-t">Phase 1 · Coast <span>months 9–24</span></div>
-          <ul><li>All 10 port stations + 150 ships on the busiest services (Mix)</li><li>Budget ≈ <b>${usdK(8 * B.stationCapex + 130 * B.kitCapex + 1.5 * B.opsCenter)}</b></li>
-          <li>KPIs: % of route where whales can be located, strikes found (strandings), extra cost per voyage</li></ul></div>
+          <ul><li>All 10 port stations + 150 ships on the busiest services (Mix)</li><li>Budget ≈ <b>${money(8 * S.stationCapex + 130 * S.kitCapex + 1.5 * S.platform)}</b></li>
+          <li>KPIs: % of route where whales can be located, strikes found (strandings), savings vs slow zones per voyage</li></ul></div>
         <div class="phase"><div class="ph-t">Phase 2 · Scale <span>years 2–4</span></div>
-          <ul><li>Fleet-wide kits funded through the existing incentive program; share data with Whale Safe and NOAA</li><li>Budget ≈ <b>${usdK(Math.max(0, B.fleetShips - 150) * B.kitCapex)}</b> + running costs</li>
-          <li>KPIs: ship participation, whale deaths per year, carrier savings vs slow zones</li></ul></div>
+          <ul><li>Fleet-wide kits through the existing incentive program; share data with Whale Safe and NOAA</li><li>Budget ≈ <b>${money(Math.max(0, maxFleet(S) - 150) * S.kitCapex)}</b> + running costs</li>
+          <li>KPIs: ship participation, whale deaths per year, carrier savings, cost per whale saved</li></ul></div>
       </div>
 
-      <div class="sec-title">4 · Who pays, and the big risks</div>
+      <div class="sec-title">Who pays, and the big risks</div>
       <table class="lab-tbl txt"><tbody>
+        <tr><td>Ship kits</td><td>Carriers, repaid by avoided slow-downs; incentive programs (like Protecting Blue Whales and Blue Skies) could cover part</td></tr>
         <tr><td>Port stations</td><td>Ports, the state (Ocean Protection Council) and research partners (like MBARI's MARS)</td></tr>
-        <tr><td>Ship kits</td><td>Carriers, paid back by avoided slow-downs; incentive programs could cover part</td></tr>
-        <tr><td>Data center</td><td>Shared, like Whale Safe today (public/NGO)</td></tr>
+        <tr><td>Data platform</td><td>Shared service, like Whale Safe today (public/NGO), or a per-ship subscription</td></tr>
         <tr><td><b>Risk:</b> towing arrays</td><td>Merchant ships don't tow hydrophones today (handling, snagging). Start with cameras + hull sensors and port stations; tow only on willing ships.</td></tr>
-        <tr><td><b>Risk:</b> silent whales</td><td>Whales that don't call can't be heard. Cameras and slow zones in peak season remain the backup.</td></tr>
-        <tr><td><b>Risk:</b> trust</td><td>Crews need few false alarms and clear instructions. The pilot must measure both.</td></tr>
+        <tr><td><b>Risk:</b> participation</td><td>Locating needs 3+ listeners, so value grows with the number of ships equipped: an early-adopter carrier gets little until others join. Port stations reduce that dependence.</td></tr>
+        <tr><td><b>Risk:</b> silent whales and trust</td><td>Whales that don't call can't be heard, and crews need few false alarms. Cameras and slow zones in peak season stay as backup; the pilot must measure both.</td></tr>
       </table>
 
-      <div class="sec-title">5 · Assumptions (edit them)</div>
-      <table class="lab-tbl assump"><tbody>
-        <tr><td>Large-ship voyages per year ${T("res")}</td><td>${inp("voyages", B.voyages)}</td><td class="muted">~2,500 large commercial vessels transit the Santa Barbara Channel each year (Santa Barbara Independent, 2026). Our route passes through it.</td></tr>
-        <tr><td>Whales killed by ships per year, California ${T("res")}${T("ass")}</td><td>${inp("deathsNoProtection", B.deathsNoProtection)}</td><td class="muted">~83 in July–December alone off the whole US West Coast (Rockwood et al. 2017: 18 blue, 22 humpback, 43 fin); about three-quarters of modeled deaths are in 10% of West Coast waters, mostly off central and southern California. The California share is my estimate.</td></tr>
-        <tr><td>Ships regularly calling California (to fit) ${T("ass")}</td><td>${inp("fleetShips", B.fleetShips)}</td><td class="muted">assumption</td></tr>
-        <tr><td>Ship kit: hydrophone + thermal camera ${T("ass")}</td><td>${inp("kitCapex", B.kitCapex, "", 90)} + ${inp("kitOpex", B.kitOpex, "", 80)}/yr</td><td class="muted">assumption; camera vendors don't publish prices</td></tr>
-        <tr><td>Cabled port station ${T("ass")}</td><td>${inp("stationCapex", B.stationCapex, "", 100)} + ${inp("stationOpex", B.stationOpex, "", 90)}/yr</td><td class="muted">assumption; the full MARS observatory (52 km cable) cost $13.5M in 2008 (MBARI). A hydrophone-only node is simpler</td></tr>
-        <tr><td>Moored hydrophone buoy ${T("ass")}</td><td>${inp("buoyCapex", B.buoyCapex, "", 90)} + ${inp("buoyOpex", B.buoyOpex, "", 80)}/yr</td><td class="muted">assumption (real-time acoustic buoys, servicing at sea)</td></tr>
-        <tr><td>Data center and operations ${T("ass")}</td><td>${inp("opsCenter", B.opsCenter, "", 100)}/yr</td><td class="muted">assumption</td></tr>
-        <tr><td>Pay setup costs off over ${T("ass")}</td><td>${inp("years", B.years, "", 50)} years at ${inp("discountPct", B.discountPct, "%", 50)}</td><td class="muted">equipment life, and the cost of money (a typical 7% real rate for infrastructure). Each year's share of setup = setup × i(1+i)ⁿ / ((1+i)ⁿ − 1)</td></tr>
-      </tbody></table>
-      <p class="small muted">Per-voyage results use ${src}. Run <b>Many voyages</b> to replace them with your own. Equipment and running costs are my estimates (vendors don't publish prices) and can easily be off by 2×; treat totals as rough planning figures, not a quote.</p>`;
+      <div class="sec-title">Assumptions (edit them)</div>
+      ${assumptionsHtml(S)}
+      <p class="small muted">Equipment and running costs are my estimates (vendors don't publish prices) and could be off by 2×; treat totals as planning figures, not a quote.
+        Effectiveness at different program sizes comes from simulated voyages on the Oakland → Long Beach route with real AIS ship traffic.</p>`;
+  }
+
+  private tag(k: "sim" | "res" | "ass" | "calc") {
+    return `<span class="stag ${k}">${{ sim: "simulation", res: "research", ass: "assumption", calc: "calculated" }[k]}</span>`;
+  }
+
+  /** A user's own batch (Many voyages) replaces the full-program point of each curve. */
+  private applyBatch() {
+    for (const m of ["ships", "mix", "network", "single"] as ModeId[]) {
+      const st = this.stats(m);
+      if (!st || st.n < 3) continue;
+      const cut = st.riskHold > 0 ? Math.max(0, 1 - st.riskTaken / st.riskHold) : 0;
+      const pt = { usd: st.usd, late: st.late, fuel: st.fuel, cut };
+      if (m === "single") setSlowZones({ x: 0, ...pt });
+      else {
+        const x = m === "network" ? this.settings().sensorCount : 1;
+        const curve = CURVES[m], k = curve.findIndex((p) => p.x === x);
+        if (k >= 0) curve[k] = { x, ...pt };
+      }
+    }
+  }
+  private bizSource() {
+    const st = this.stats("ships");
+    return st && st.n >= 3 ? `your ${st.n}-voyage batch (full-program points) + reference curves` : "reference simulations: 120 voyages per approach at full scale, 25 per point at smaller scales";
+  }
+
+  private wireBusiness() {
+    document.querySelectorAll<HTMLButtonElement>("[data-bmode]").forEach((b) => (b.onclick = () => { this.bz.mode = b.dataset.bmode as ModeId; this.renderKeep(); }));
+    document.querySelectorAll<HTMLInputElement>("[data-bs]").forEach((inp) => {
+      inp.oninput = () => {
+        const k = inp.dataset.bs as keyof BizState;
+        const v = Number(inp.value);
+        if (k === "fleet") this.bz.fleet = sliderToFleet(v, maxFleet(this.bz));
+        else (this.bz as unknown as Record<string, number>)[k] = v;
+        if (k === "voyagesPerShip") { this.bz.fleet = Math.min(this.bz.fleet, maxFleet(this.bz)); }
+        const lbl = document.getElementById(`bzv-${k}`);
+        if (lbl) lbl.innerHTML = k === "compliance" ? `${v}%` : k === "fleet" ? `${this.bz.fleet.toLocaleString("en-US")} <span class="muted">of ${maxFleet(this.bz).toLocaleString("en-US")}</span>` : v.toLocaleString("en-US");
+        $("bzOut").innerHTML = outputHtml(this.bz, this.bizSource());
+      };
+      if (inp.dataset.bs === "voyagesPerShip") inp.onchange = () => this.renderKeep(); // the fleet slider's range changes
+    });
+    document.querySelectorAll<HTMLInputElement>("[data-bz]").forEach((inp) => {
+      inp.onchange = () => {
+        const v = Number(inp.value.replace(/[$,%\s]/g, ""));
+        if (!isFinite(v) || v < 0) return;
+        (this.bz as unknown as Record<string, number>)[inp.dataset.bz!] = v;
+        this.bz.fleet = Math.min(this.bz.fleet, maxFleet(this.bz));
+        this.renderKeep();
+      };
+    });
+  }
+  private renderKeep() {
+    const y = document.getElementById("labBody")!.scrollTop;
+    this.render();
+    document.getElementById("labBody")!.scrollTop = y;
   }
 }
 

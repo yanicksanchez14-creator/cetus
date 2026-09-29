@@ -1,6 +1,54 @@
 /** Little ⓘ buttons: plain-English explanations for every number and control. */
 
 export const INFO: Record<string, string> = {
+  bizFleet:
+    "How many ships join the program and carry a kit (towed hydrophone + thermal camera). Locating a whale needs 3+ listeners, so a lone equipped ship mostly just hears whales; the value grows as more of the fleet joins. The effect at each size comes from simulated voyages where only that share of the real ships is equipped. The share of traffic equipped = (ships − 1) × voyages each ÷ all voyages through the area; the top of the slider is enough ships to carry every voyage. The slider is logarithmic.",
+  bizVoy:
+    "How many California coastal voyages each equipped ship makes a year (a liner on a weekly loop makes ~25–50). Savings scale with voyages covered, capped at the total voyages through the area.",
+  bizStations:
+    "Mix only: cabled seafloor hydrophone stations off major ports (like MBARI's MARS). The simulation modeled 10; with fewer, the benefit is scaled linearly between Ships alone (0) and the 10-station network. That scaling is an assumption.",
+  bizBuoys:
+    "Buoys only: moored hydrophone buoys along the lanes. The risk cut at each count comes from simulated voyages (50, 150, 300 and 500 buoys). Purely theoretical: hundreds of moorings would be costly to service and a hazard at sea.",
+  bizCompliance:
+    "The share of voyages that would otherwise slow down for slow zones. Only those voyages save money by switching to targeted steering; a ship that ignores slow zones today saves nothing (but its whales are still protected). California's zones are voluntary and cooperation is partial, so 70% is an assumption; set 100% to model mandatory zones.",
+  bizNPV:
+    "Net present value: the set-up cost now, plus each year's net benefit discounted back to today at the discount rate, over the horizon. Above $0 means the program earns more than the money would elsewhere.",
+  bizNet:
+    "Each year: slow-down costs avoided on voyages that would have complied, minus equipment servicing, stations or buoys, and the data platform. Set-up costs are not in this line (see NPV and payback).",
+  bizPayback:
+    "How long until the discounted yearly net benefits repay the set-up cost. 'Never' means it doesn't repay within the horizon at this scale.",
+  bizIRR:
+    "Internal rate of return: the discount rate at which NPV would be exactly zero. It's green when it beats the discount rate you set.",
+  bizWhales:
+    "Whale deaths a year (California, no protection) × the strike-risk cut at this scale × the share of voyages the program covers. Compared with doing nothing, not with slow zones.",
+  bizPerWhale:
+    "The yearly all-in cost (set-up spread over the horizon at the discount rate, plus running costs, minus savings) divided by whales saved a year. 'Pays for itself' means savings exceed costs.",
+  bizCO2:
+    "Fuel burned vs complying with slow zones, × 3.206 t CO₂ per t of fuel. Slow zones save fuel in the zone but make ships speed up (up to 19 kn) to recover lost time, which usually costs more.",
+  bizSZ:
+    "Every complying voyage loses time (valued at $4,200/h) and some net fuel in each slow zone it meets. Total = voyages × share that complies × simulated cost per voyage.",
+  bizValue:
+    "A great whale's lifetime economic value, mostly from the carbon it helps capture plus tourism and fishing benefits: about $2 million (Chami et al., IMF, 2019). Used only to express whales saved in dollars; it's not in the NPV.",
+  bizCash:
+    "Year 0 is the set-up cost (negative). Each year adds that year's net benefit, discounted. Where the line crosses $0 is the discounted payback.",
+  bizScale:
+    "Same assumptions, different program size. Fixed costs (the data platform, stations) need enough voyages to spread over, and effectiveness grows with the number of listeners, so there is a break-even size.",
+  bizRegion:
+    "About 2,500 large commercial vessels transit the Santa Barbara Channel each year (Santa Barbara Independent, 2026). The simulated route passes through it.",
+  bizDeaths:
+    "~83 blue, humpback and fin whales are estimated killed by ships off the whole US West Coast in July–December alone (Rockwood et al. 2017), and gray whales are struck too. About three-quarters of modeled deaths fall off central and southern California. The California figure of 60 is my estimate.",
+  bizKit:
+    "Towed hydrophone array + thermal camera + install, per ship, and yearly servicing. An assumption: vendors don't publish prices.",
+  bizStation:
+    "A cabled seafloor hydrophone node off a port, installed and run. An assumption; for scale, the whole MARS observatory (52 km cable, science node) cost $13.5M in 2008 (MBARI). A hydrophone-only node is simpler.",
+  bizBuoy:
+    "A moored real-time acoustic buoy, installed, and yearly servicing at sea. An assumption.",
+  bizPlatform:
+    "Shared data platform and 24/7 operations that fuse detections and send them to ships (like Whale Safe today). A fixed yearly cost, an assumption.",
+  bizUptake:
+    "Buoys only: a public network tells every ship where the whales are, but acting on it is voluntary. Steering 1–2 km costs little, so most ships would, but not all. 90% is an assumption.",
+  bizDiscount:
+    "The horizon is the equipment life. The discount rate is the cost of money: 7% is a typical real rate for infrastructure appraisals.",
   sensors:
     "<b>Only used in Buoys mode.</b> How many hydrophone buoys float along the shipping lanes (50–500; 500 means one every ~9 km). More buoys means they sit closer together, so each whale call is heard by more of them and the whale is located more precisely. Ships and Mix use real ships and port stations instead, and Slow zones uses single buoys. Changing this restarts the voyage.",
   timing:

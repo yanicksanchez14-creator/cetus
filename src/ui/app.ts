@@ -168,6 +168,7 @@ export class App {
   private renderedDecision: Decision | null = null;
   private spotlight: { d: Decision; t0: number } | null = null;
   private bubble: { html: string; title: string; policy: boolean; until: number } | null = null;
+  private bubbleShownAt = 0;
   private seenTracks = new Set<number>();
   private summaryShown = false;
   private skipRequested = false;
@@ -679,7 +680,8 @@ export class App {
           lineWidthUnits: "pixels", getLineWidth: 1.5,
         }));
         layers.push(new TextLayer({
-          id: "zone-labels", data: s.zones, getPosition: (d: any) => [d.lon, d.lat], getText: (d: any) => `${SPECIES[d.species as SpeciesId].name} heard — somewhere in here`,
+          // each label sits on the top edge of its own circle, so zones of different species (sizes) never overlap
+          id: "zone-labels", data: s.zones, getPosition: (d: any) => [d.lon, d.lat + d.r / 111], getPixelOffset: [0, 10], getText: (d: any) => `${SPECIES[d.species as SpeciesId].name} heard — somewhere in here`,
           getSize: 11, getColor: [210, 195, 255, 220], fontFamily: "Inter, system-ui, sans-serif", fontWeight: 600, characterSet: "auto",
           outlineWidth: 3, outlineColor: [2, 9, 18, 220], fontSettings: { sdf: true, fontSize: 48, buffer: 10, radius: 10 },
         }));
@@ -844,13 +846,16 @@ export class App {
         bub.style.left = `${x}px`;
         bub.style.top = `${y}px`;
         bub.hidden = false;
-        bub.className = `bubble${this.bubble.policy ? " policy" : ""}`;
-        const key = this.bubble.title + this.bubble.html;
-        if (bub.dataset.key !== key) {
-          bub.dataset.key = key;
-          $("bubbleTitle").textContent = this.bubble.title;
-          $("bubbleBody").innerHTML = this.bubble.html;
-        }
+        const action = (/<span class="hl">([^<]*)<\/span>/.exec(this.bubble.html)?.[1] ?? this.bubble.title).trim();
+        // a new message (new title or action) shows in full; refreshed numbers for the same manoeuvre don't restart it
+        const key = this.bubble.title + "|" + action;
+        if (bub.dataset.key !== key) { bub.dataset.key = key; this.bubbleShownAt = now; }
+        if (bub.dataset.html !== this.bubble.html) { bub.dataset.html = this.bubble.html; $("bubbleBody").innerHTML = this.bubble.html; }
+        // after ~4 s the bubble shrinks to a small, see-through tag with just the action, so the whale stays visible
+        const compact = now - this.bubbleShownAt > 4000;
+        bub.className = `bubble${this.bubble.policy ? " policy" : ""}${compact ? " compact" : ""}`;
+        const want = compact ? action : this.bubble.title;
+        if ($("bubbleTitle").textContent !== want) $("bubbleTitle").textContent = want;
         $("bubbleTime").textContent = clock(s.t).slice(-5);
       }
     } else bub.hidden = true;

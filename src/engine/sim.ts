@@ -34,6 +34,8 @@ export interface SimOptions {
   extraWhales: number;
   style: "targeted" | "ahead"; // network only: react with the cheapest option, or bend early at constant speed
   sensorCount: number;
+  /** Ships/Mix: share of the other ships that carry the kit (hydrophone + camera); our own ship always does. */
+  shipShare?: number;
   corridorKm: number;
   sigmaT: number; // arrival-time error, s
   baseSpeed: number; // knots
@@ -726,7 +728,10 @@ export class Simulation {
       this.shipsNow = this.traffic ? this.traffic.at(this.t) : [];
       this.shipsNowT = this.t;
     }
-    const out = this.shipsNow.map((q) => ({
+    const share = this.opts.shipShare ?? 1;
+    // only ships in the program carry the kit (a fixed, deterministic subset, so a ship is either in or out)
+    const inProgram = (idx: number) => share >= 1 || ((Math.imul(idx + 1, 2654435761) >>> 0) / 4294967296) < share;
+    const out = this.shipsNow.filter((q) => inProgram(q.idx)).map((q) => ({
       s: { id: SHIP_SENSOR_BASE + q.idx, pos: q.pos, ll: toLL(q.pos[0], q.pos[1]), phase: 0 } as Sensor,
       v: q.v,
     }));
