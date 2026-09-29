@@ -91,13 +91,13 @@ const MODE_INFO: Record<"ships" | "mix" | "network" | "single", { title: string;
   mix: {
     title: "Mix: ships + 10 port stations",
     what: "Ships as sensors, plus one quiet cabled hydrophone on the seafloor off each major port, from Bodega Bay to Long Beach (like MBARI's MARS observatory off Monterey).",
-    whatIf: "ports added ~10 seafloor stations, instead of thousands of buoys. They cover the busy approaches where ships and whales crowd together.",
+    whatIf: "ports added ~10 seafloor stations, instead of hundreds of buoys. They cover the busy approaches where ships and whales crowd together.",
     watch: "Compare the blind spots and cost with Ships mode. Humpback calls carry only ~20 km, so offshore they are rarely heard by 3 listeners at once: humpbacks are mostly found by thermal cameras here. Fin and blue calls carry 50-100 km and get located.",
   },
   network: {
     title: "Buoy network",
-    what: "3,000 hydrophone buoys by default (500-5,000 on the slider), ~3-4 km apart along the lanes. Nearly every call is heard by many buoys, so whales are located to within tens of metres.",
-    whatIf: "a dense network like this existed. It's purely theoretical: thousands of moored buoys would be very costly and hard to maintain, and would add marine debris, entanglement and navigation hazards. It shows how well whales could be found, not a practical plan.",
+    what: "500 hydrophone buoys by default (50-500 on the slider), ~9 km apart along the lanes. Fin and blue calls carry far, so most are heard by several buoys and located to within tens to hundreds of metres; humpbacks need the denser settings.",
+    whatIf: "a dense network like this existed. It's purely theoretical: hundreds of moored buoys would be very costly and hard to maintain, and would add marine debris, entanglement and navigation hazards. It shows how well whales could be found, not a practical plan.",
     watch: "Use the Sensors slider to see how fewer buoys change accuracy.",
   },
   single: {
@@ -137,7 +137,7 @@ export class App {
   private waiting = false; // paused for a prompt or strike alert
   private wasCautious = false;
   private routeId = "oak-lb";
-  private sensorCount = 3000;
+  private sensorCount = 500;
   private sigmaMs = 20;
   private seed = 20260924;
   // visuals
@@ -330,7 +330,7 @@ export class App {
       $("ccTitle").textContent = `${SPECIES[p.species].name} heard ahead`;
       $("ccBody").innerHTML = `Our towed hydrophone hears it about <b>${p.relBearingDeg}° off the bow</b> (port or starboard, it can't tell) and,
         from how loud it is, probably within <b>~${Math.max(1, Math.round(p.maxRangeKm))} km</b>, but nobody has located it yet. Slow to 13 kn until it's passed (up to ~6.5 km)?
-        <br><span class="muted">Cost ≈ ${p.costUsd < 0 ? "−" : ""}$${Math.round(Math.abs(p.costUsd)).toLocaleString("en-US")} (fuel saved vs +${Math.round(p.extraMin)} min lost) · a strike at 13 kn is ~${Math.round(lethality(13) * 100)}% lethal vs ~${Math.round(lethality(16) * 100)}% at 16 kn.</span>`;
+        <br><span class="muted">Cost ≈ ${p.costUsd < 0 ? "−" : ""}$${Math.round(Math.abs(p.costUsd)).toLocaleString("en-US")} (fuel saved vs +${Math.round(p.extraMin)} min lost) · a strike at 13 kn is ~${Math.round(lethality(13) * 100)}% lethal vs ~${Math.round(lethality(16) * 100)}% at 16 kn. This choice is only for this unlocated whale; whales that get located are still handled by the ship's decision engine, which may steer or slow.</span>`;
       $("cautionCard").hidden = false;
     }
     for (const nm of s.nearMisses) {

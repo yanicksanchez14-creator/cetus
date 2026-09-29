@@ -49,7 +49,7 @@ export const DEFAULT_OPTIONS: SimOptions = {
   caution: "slow",
   scriptedSinger: false,
   extraWhales: 5,
-  sensorCount: 3000,
+  sensorCount: 500,
   corridorKm: 45,
   sigmaT: 0.02,
   baseSpeed: 16,
@@ -143,7 +143,8 @@ export class Simulation {
   maneuver: ActiveManeuver | null = null;
   decisions: Decision[] = [];
   calls: CallEvent[] = [];
-  zones = new Map<number, Zone>();
+  /** single-buoy detections, one per buoy AND species (a humpback and a fin whale heard by the same buoy are two zones) */
+  zones = new Map<string, Zone>();
   fuelUsed = 0;
   finished = false;
   stats = { calls: 0, detections: 0, fixes: 0, errSum: 0, sightings: 0, ambiguous: 0 };
@@ -547,7 +548,7 @@ export class Simulation {
       }
     } else if (detected.length) {
       const b = detected[0].sensor;
-      this.zones.set(b.id, { buoyId: b.id, cx: b.pos[0], cy: b.pos[1], r: nominalRangeKm(sp), t: tCall, species: w.species });
+      this.zones.set(`${b.id}:${w.species}`, { buoyId: b.id, cx: b.pos[0], cy: b.pos[1], r: nominalRangeKm(sp), t: tCall, species: w.species });
     }
     this.calls.push(ev);
     if (this.calls.length > 60) this.calls.shift();

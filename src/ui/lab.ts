@@ -37,7 +37,7 @@ const REFERENCE: Record<ModeId, { usd: number; lateMin: number; riskHold: number
   // riskHold / riskTaken: close passes (<500 m) weighted by lethality at speed, per voyage (hindsight, true whales)
   ships: { usd: 113, lateMin: 5, riskHold: 0.442, riskTaken: 0.064 },
   mix: { usd: 111, lateMin: 4, riskHold: 0.442, riskTaken: 0.079 },
-  network: { usd: 154, lateMin: 3, riskHold: 0.442, riskTaken: 0.052 },
+  network: { usd: 155, lateMin: 3, riskHold: 0.442, riskTaken: 0.024 }, // 500 buoys
   single: { usd: 10698, lateMin: 86, riskHold: 0.442, riskTaken: 0.070 },
 };
 
@@ -218,7 +218,7 @@ export class FleetLab {
     setTimeout(() => { const b = document.getElementById("labGoBatch"); if (b) b.onclick = () => { this.tab = "batch"; this.render(); }; });
     return `<p class="lab-lead">The <b>same route and the same whales</b> (seed ${s.seed}, ${s.whaleCount} whales) run in all four modes at once, in the background.
       Nothing changes except how the whales are found. Best value in each row is highlighted.</p>
-      <div class="lab-actions">${this.running ? `<button class="btn" id="labStop">Stop</button><span class="muted small">Running 4 voyages… (~20–60 s; Buoys is slowest: ${this.settings().sensorCount.toLocaleString()} sensors)</span>` : `<button class="btn btn-primary" id="labRunCompare">${this.compare.length ? "Run again" : "Run all 4 modes"}</button><span class="muted small">Uses your current whale count, sensors and timing error.</span>`}</div>
+      <div class="lab-actions">${this.running ? `<button class="btn" id="labStop">Stop</button><span class="muted small">Running 4 voyages… (~20–60 s; Buoys uses ${this.settings().sensorCount.toLocaleString()} sensors)</span>` : `<button class="btn btn-primary" id="labRunCompare">${this.compare.length ? "Run again" : "Run all 4 modes"}</button><span class="muted small">Uses your current whale count, sensors and timing error.</span>`}</div>
       ${table}${verdict}`;
   }
 
@@ -333,7 +333,7 @@ export class FleetLab {
     const sys: Record<ModeId, { setup: number; yearly: number; what: string }> = {
       ships: { setup: B.fleetShips * B.kitCapex, yearly: B.fleetShips * B.kitOpex + B.opsCenter, what: `${B.fleetShips.toLocaleString()} ship kits (towed hydrophone + thermal camera) + data center` },
       mix: { setup: B.fleetShips * B.kitCapex + stations * B.stationCapex, yearly: B.fleetShips * B.kitOpex + stations * B.stationOpex + B.opsCenter, what: `ship kits + ${stations} cabled port stations + data center` },
-      network: { setup: 3000 * B.buoyCapex, yearly: 3000 * B.buoyOpex + B.opsCenter, what: "3,000 moored buoys + data center" },
+      network: { setup: 500 * B.buoyCapex, yearly: 500 * B.buoyOpex + B.opsCenter, what: "500 moored buoys + data center" },
       single: { setup: 0, yearly: 0, what: "existing buoys and voluntary program (already running)" },
     };
     const i = B.discountPct / 100, n = Math.max(1, B.years);

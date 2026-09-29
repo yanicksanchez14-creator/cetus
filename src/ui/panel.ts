@@ -151,7 +151,7 @@ export function renderStory(el: HTMLElement) {
     <div class="tldr"><b>The short version</b>
       <ul><li>Today, protection is <b>blanket and voluntary</b>: slow a whole region, whether a whale is there or not.</li>
         <li>If sensors could <b>locate</b> each whale, a ship could steer 1–2 km around it and keep its speed.</li>
-        <li>With a dense sensor network the simulation cut strike risk by <b>~88% for about $150 per voyage</b>. Slow zones cut it ~84% for about <b>$10,700</b>.</li>
+        <li>With a dense sensor network the simulation cut strike risk by <b>~95% for about $150 per voyage</b>. Slow zones cut it ~84% for about <b>$10,700</b>.</li>
         <li>Ships sharing what they hear cut it ~85% for about $110, but they locate fin and blue whales along only half the route and almost never humpbacks.</li></ul></div>
 
     <nav class="doc-toc">${["The problem", "What ships do today", "The idea", "What would a real captain do?", "Four what-ifs", "What the simulation shows"]
@@ -201,14 +201,14 @@ export function renderStory(el: HTMLElement) {
     ${acc("6", "Four what-ifs", "Ships · Mix · Buoys · Slow zones", `
       <div class="mode-grid">
         <div class="mode-card m-ships"><b>Ships</b><span>Every real ship tows a hydrophone and carries a thermal camera, and they share what they hear. No new hardware at sea.</span></div>
-        <div class="mode-card m-mix"><b>Mix</b><span>Ships plus one quiet seafloor station off each of 10 ports, like MBARI's MARS. ~10 stations instead of thousands of buoys.</span></div>
-        <div class="mode-card m-buoys"><b>Buoys</b><span>A dense hydrophone network along the lanes. Purely theoretical: the best accuracy, but thousands of moorings would be very costly, hard to maintain and a hazard at sea.</span></div>
+        <div class="mode-card m-mix"><b>Mix</b><span>Ships plus one quiet seafloor station off each of 10 ports, like MBARI's MARS. ~10 stations instead of hundreds of buoys.</span></div>
+        <div class="mode-card m-buoys"><b>Buoys</b><span>A dense hydrophone network along the lanes. Purely theoretical: the best accuracy, but hundreds of moorings would be very costly, hard to maintain and a hazard at sea.</span></div>
         <div class="mode-card m-today"><b>Slow zones</b><span>What exists today, at its best: a single buoy hears a whale; the ship slows to 10 knots in a zone around it (~15 nm here).</span></div>
       </div>`)}
 
     ${acc("7", "What the simulation shows", "Locating whales well is both the cheapest and the safest", `
       <div class="res-grid">
-        <div class="res"><b>−88%</b><span>strike risk with a dense buoy network, for ~$150 extra per voyage.</span></div>
+        <div class="res"><b>−95%</b><span>strike risk with a dense buoy network (500 buoys), for ~$150 extra per voyage.</span></div>
         <div class="res bad"><b>−84%</b><span>with slow zones, for ~$10,700 extra and ~1.4 hours late.</span></div>
         <div class="res warn"><b>−85%</b><span>with ships alone (~$110 per voyage), though many whales are never located.</span></div>
         <div class="res warn"><b>−82%</b><span>with ships plus 10 port stations (Mix), for ~$110 per voyage.</span></div>
@@ -219,7 +219,7 @@ export function renderStory(el: HTMLElement) {
         <li><b>Humpbacks stay the hardest.</b> Their song is quiet; cameras and a short precautionary slow-down protect them.</li>
       </ul>
       <p class="small muted">Averages over 120 test voyages per mode with 8 whales. Close passes are rare events (about one per two voyages if the ship ignored whales), so differences of a few points are noise.
-        Fin and blue whales can be located along ~46% of the route with Ships, ~76% with Mix and ~99% with Buoys; humpbacks almost never with Ships or Mix and ~98% with Buoys. Simulation results under the assumptions in Method, not field measurements.
+        Fin and blue whales can be located along ~46% of the route with Ships, ~76% with Mix and ~99% with Buoys; humpbacks almost never with Ships or Mix and ~97% with Buoys. Simulation results under the assumptions in Method, not field measurements.
         Whales are simulated; in Ships and Mix the ship traffic is real (AIS, 14–15 Aug 2024).</p>`)}
 
     ${acc("8", "Try it yourself", "Fleet lab and replay", `
@@ -314,7 +314,7 @@ export function renderMethod(el: HTMLElement) {
         <span>Ships plus 10 quiet cabled seafloor hydrophones off major ports (Bodega Bay, San Francisco, Half Moon Bay, Santa Cruz, Monterey/MARS, Morro Bay,
         Port San Luis, Santa Barbara, Port Hueneme, LA/Long Beach). <b>Good:</b> fin/blue located on ~76% of the route. <b>Bad:</b> the Big Sur gap.</span></div>
       <div class="mode-card m-buoys"><b>Buoys: dense network</b>
-        <span>500–5,000 moored buoys along the lane (slider; default 3,000, ~3–4 km apart). <b>Good:</b> located along ~99% of the route, tens of metres.
+        <span>50–500 moored buoys along the lane (slider; default 500, ~9 km apart). <b>Good:</b> located along ~99% of the route, tens of metres.
         <b>Bad:</b> purely theoretical. Very costly to deploy and maintain, and a source of marine debris, entanglement risk and navigation hazards.</span></div>
       <div class="mode-card m-today"><b>Slow zones: what exists today</b>
         <span>One listening buoy per hotspot; each detection means a 10-knot zone. Like the East Coast's triggered right-whale zones; California's are

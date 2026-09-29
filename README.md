@@ -28,8 +28,8 @@ Cetus asks a simple question: **if we knew where each whale was, how much cheape
 | Mode | What listens | What if |
 |---|---|---|
 | **Ships** (default) | Every real ship off California (AIS replay) tows a hydrophone and carries a thermal camera | ...ships shared what they hear? No new hardware at sea |
-| **Mix** | Ships + 10 cabled seafloor stations off major ports (like MBARI's MARS) | ...ports added \~10 stations instead of thousands of buoys? |
-| **Buoys** | 500–5,000 moored hydrophone buoys along the lanes (default 3,000) | ...a dense network existed? Best accuracy, costly |
+| **Mix** | Ships + 10 cabled seafloor stations off major ports (like MBARI's MARS) | ...ports added \~10 stations instead of hundreds of buoys? |
+| **Buoys** | 50–500 moored hydrophone buoys along the lanes (default 500) | ...a dense network existed? Purely theoretical: best accuracy, but costly and a hazard at sea |
 | **Slow zones** | One listening buoy per hotspot: a detection means a 10-kn zone around it (\~15 nm here) | What exists today, at its best (every ship obeys) |
 
 ## What it shows
@@ -39,7 +39,7 @@ Cetus asks a simple question: **if we knew where each whale was, how much cheape
 | What the ship knows | Whale position ± tens to hundreds of metres, plus a forecast | "A whale is within \~20–100 km of this buoy" |
 | Typical response | Keep 16 kn, steer 1–2 km around the whale (slow down only for groups or late finds) | 10 kn for \~50 km |
 | Extra cost per voyage* | **\~$150** (Buoys), \~$110 (Ships), \~$110 (Mix) | **\~$10.7k**, \~1.4 h late even after catching up |
-| Strike-risk cut vs ignoring whales* | **\~88%** with Buoys; \~85% with ships alone, \~82% with ships + port stations (a gap within the noise of 120 voyages) | **\~84%** (slower hits are less deadly, at a high price) |
+| Strike-risk cut vs ignoring whales* | **\~95%** with Buoys (500 buoys); \~85% with ships alone, \~82% with ships + port stations (a gap within the noise of 120 voyages) | **\~84%** (slower hits are less deadly, at a high price) |
 | Share of a normal trip (\~$224k) | \~0.05–0.07% | \~5% |
 
 \*Oakland → Long Beach, 120 random voyages per mode with 8 whales: each strike hotspot (Farallones, Big Sur, Santa Barbara
@@ -54,7 +54,7 @@ that ignored them. These are **simulation outputs under the stated assumptions**
 1. **Listen.** Each call's received level = species source level − transmission loss (15·log₁₀ r plus Thorp absorption at
    the call's frequency); a listener detects it at \~10 dB above the noise. Noise includes background, the own ship's
    engine for towed arrays (500 m astern), and nearby ship noise (20·log r to 1 km, then 15·log r). Sound can't cross land.
-   Thermal cameras spot surfacing whales within 6.5 km. Buoys sit on a hexagonal grid (\~3.6 km apart at 3,000), only in
+   Thermal cameras spot surfacing whales within 6.5 km. Buoys sit on a hexagonal grid (\~9 km apart at 500), only in
    water deeper than 30 m.
 2. **Locate.** Time-difference-of-arrival (TDOA) multilateration on the 12 loudest detections (Gauss-Newton/Levenberg-
    Marquardt) gives a position and a 95% error ellipse. Timing error (20 ms default) and an unknown ±0.4% sound-speed bias
@@ -150,7 +150,7 @@ would be better still. These ranges are estimates from the model's stated assump
   fitted to tag data, and calling rates are simplified.
 - **Acoustics are simplified:** no ray tracing, sound-speed profile, bathymetric shadowing or multipath. Real
   localization errors will be larger, especially near the coast.
-- **A 3,000-buoy network does not exist.** It is a design scenario. Moored hydrophones, power and data links
+- **A 500-buoy network does not exist.** It is a design scenario. Moored hydrophones, power and data links
   would cost far more to build and maintain than this model counts. The Fleet lab's business case gives rough
   yearly costs, but its equipment prices are estimates.
 - **Species ID is assumed perfect** (it comes from the call type). Silent whales are invisible to any acoustic system.
