@@ -151,8 +151,8 @@ export function renderStory(el: HTMLElement) {
     <div class="tldr"><b>The short version</b>
       <ul><li>Today, protection is <b>blanket and voluntary</b>: slow a whole region, whether a whale is there or not.</li>
         <li>If sensors could <b>locate</b> each whale, a ship could steer 1–2 km around it and keep its speed.</li>
-        <li>With a dense sensor network the simulation cut strike risk by <b>~91% for about $150 per voyage</b>. Slow zones cut it ~84% for about <b>$10,700</b>.</li>
-        <li>Ships sharing what they hear cut it ~83% for about $100, but they locate fin and blue whales along only half the route and almost never humpbacks.</li></ul></div>
+        <li>With a dense sensor network the simulation cut strike risk by <b>~88% for about $150 per voyage</b>. Slow zones cut it ~84% for about <b>$10,700</b>.</li>
+        <li>Ships sharing what they hear cut it ~85% for about $110, but they locate fin and blue whales along only half the route and almost never humpbacks.</li></ul></div>
 
     <nav class="doc-toc">${["The problem", "What ships do today", "The idea", "What would a real captain do?", "Four what-ifs", "What the simulation shows"]
       .map((t) => `<a href="#sec-${t.toLowerCase().replace(/[^a-z]+/g, "-")}">${t.replace("What would a real captain do?", "A captain's view").replace("What the simulation shows", "Results")}</a>`).join("")}</nav>
@@ -208,14 +208,14 @@ export function renderStory(el: HTMLElement) {
 
     ${acc("7", "What the simulation shows", "Locating whales well is both the cheapest and the safest", `
       <div class="res-grid">
-        <div class="res"><b>−91%</b><span>strike risk with a dense buoy network, for ~$150 extra per voyage.</span></div>
+        <div class="res"><b>−88%</b><span>strike risk with a dense buoy network, for ~$150 extra per voyage.</span></div>
         <div class="res bad"><b>−84%</b><span>with slow zones, for ~$10,700 extra and ~1.4 hours late.</span></div>
-        <div class="res warn"><b>−83%</b><span>with ships alone (~$100 per voyage), though many whales are never located.</span></div>
-        <div class="res warn"><b>−86%</b><span>with ships plus 10 port stations (Mix), for ~$100 per voyage.</span></div>
+        <div class="res warn"><b>−85%</b><span>with ships alone (~$110 per voyage), though many whales are never located.</span></div>
+        <div class="res warn"><b>−82%</b><span>with ships plus 10 port stations (Mix), for ~$110 per voyage.</span></div>
       </div>
       <ul class="findings">
         <li><b>Ships alone leave gaps.</b> A ship's own engine noise means it hears a humpback only ~4 km away.</li>
-        <li><b>Mix closes many of them</b> with no surface buoys: fin and blue whales can be located along ~76% of the route instead of ~46%. <b>Big Sur</b> is the big blind spot: no port, no station.</li>
+        <li><b>Mix closes many of them</b> with no surface buoys: fin and blue whales can be located along ~76% of the route instead of ~46%. In these runs that didn't cut risk further than Ships alone (~82% vs ~85%, within the noise of 120 voyages). <b>Big Sur</b> is the big blind spot: no port, no station.</li>
         <li><b>Humpbacks stay the hardest.</b> Their song is quiet; cameras and a short precautionary slow-down protect them.</li>
       </ul>
       <p class="small muted">Averages over 120 test voyages per mode with 8 whales. Close passes are rare events (about one per two voyages if the ship ignored whales), so differences of a few points are noise.

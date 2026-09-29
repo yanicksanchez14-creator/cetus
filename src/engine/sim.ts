@@ -845,16 +845,17 @@ export class Simulation {
   }
 
   private checkDecisions() {
-    // The whale this slow-down was for is behind us: speed back up now instead of finishing the planned zone.
+    // The whale this manoeuvre was for is behind us: return to the lane and normal speed now, instead of finishing
+    // the planned shift or slow-down. (Returning earlier, while the whale is still ahead, was tested and cost safety.)
     const mm = this.maneuver;
-    if (mm && mm.decision.trackId !== undefined && this.plan.zones.some((z) => z.v !== CAUTION_KN && z.s1 > this.s + 0.5)) {
-      const tr = this.tracker.tracks.find((x) => x.id === mm.decision.trackId);
-      const q = tr ? predictPosition(tr, this.t) : null;
-      const behind = !q || this.route.project([q.x, q.y]).s < this.s - 1;
-      if (behind && this.s > mm.decision.sConflict + 1) {
-        this.plan = { ...this.plan, zones: this.plan.zones.map((z) => (z.v === CAUTION_KN ? z : { ...z, s1: Math.min(z.s1, this.s) })).filter((z) => z.s1 > z.s0) };
-        mm.plan = this.plan;
-        mm.endS = Math.max(this.s + 0.1, offsetEnd(this.plan) + 1);
+    if (mm && mm.decision.trackId !== undefined && !(mm as { released?: boolean }).released) {
+      const cur = offsetAt(this.plan, this.s);
+      const slowAhead = this.plan.zones.some((z) => z.v !== CAUTION_KN && z.s1 > this.s + 0.5);
+      if (Math.abs(cur) > 0.05 || slowAhead || (this.plan.offset && this.plan.offset.s0 > this.s)) {
+        const tr = this.tracker.tracks.find((x) => x.id === mm.decision.trackId);
+        const q = tr ? predictPosition(tr, this.t) : null;
+        const clear = !q || this.route.project([q.x, q.y]).s < this.s - 1;
+        if (clear) this.release();
       }
     }
     const bs = this.beliefs();
@@ -908,6 +909,23 @@ export class Simulation {
     }
     this.commit(worst);
     this.announce(worst);
+  }
+
+  /** Whale clear: ease back to the lane (gently) and drop any remaining slow-down, keeping precautions. */
+  private release() {
+    if (this.maneuver) (this.maneuver as { released?: boolean }).released = true;
+    const cur = offsetAt(this.plan, this.s);
+    let offset: Offset | null = null;
+    if (Math.abs(cur) > 0.05) {
+      const back = rampForAngle(cur, 12);
+      offset = { s0: this.s, d0: cur, d: cur, ramp: 0.01, s1: this.s + back + 0.01, rampBack: back };
+    }
+    const zones = this.plan.zones.filter((z) => z.v === CAUTION_KN);
+    this.plan = { baseSpeed: this.plan.baseSpeed, zones, offset };
+    if (this.maneuver) {
+      this.maneuver.plan = this.plan;
+      this.maneuver.endS = Math.max(this.s + 0.1, offset ? offsetEnd(this.plan) + 0.5 : this.s + 0.1, ...zones.map((z) => z.s1));
+    }
   }
 
   /**
