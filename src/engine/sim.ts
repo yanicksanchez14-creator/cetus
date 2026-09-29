@@ -784,7 +784,7 @@ export class Simulation {
     const ahead = this.opts.baseSpeed * KNOT_KMS * 3.2 * 3600;
     const near = (x: number, y: number, margin: number) => {
       const p = this.route.project([x, y]);
-      return p.s > this.s - 5 && p.s < this.s + ahead && p.dist < margin;
+      return p.s > this.s - 0.5 && p.s < this.s + ahead && p.dist < margin; // a whale behind the ship can't be hit
     };
     if (this.opts.mode !== "single") {
       for (const tr of [...this.tracker.tracks].sort((a, b) => b.nFixes - a.nFixes)) {
@@ -845,6 +845,18 @@ export class Simulation {
   }
 
   private checkDecisions() {
+    // The whale this slow-down was for is behind us: speed back up now instead of finishing the planned zone.
+    const mm = this.maneuver;
+    if (mm && mm.decision.trackId !== undefined && this.plan.zones.some((z) => z.v !== CAUTION_KN && z.s1 > this.s + 0.5)) {
+      const tr = this.tracker.tracks.find((x) => x.id === mm.decision.trackId);
+      const q = tr ? predictPosition(tr, this.t) : null;
+      const behind = !q || this.route.project([q.x, q.y]).s < this.s - 1;
+      if (behind && this.s > mm.decision.sConflict + 1) {
+        this.plan = { ...this.plan, zones: this.plan.zones.map((z) => (z.v === CAUTION_KN ? z : { ...z, s1: Math.min(z.s1, this.s) })).filter((z) => z.s1 > z.s0) };
+        mm.plan = this.plan;
+        mm.endS = Math.max(this.s + 0.1, offsetEnd(this.plan) + 1);
+      }
+    }
     const bs = this.beliefs();
     if (!bs.length) return;
     let worst: Decision | null = null;
@@ -890,7 +902,8 @@ export class Simulation {
     }
     const la = this.lastAnnounce;
     if (worst.chosen.id === "hold") {
-      if (!la || Math.abs(la.s - worst.sConflict) > 20 || la.id !== "hold") this.announce(worst);
+      // only talk about whales still ahead (never "likely clear" about one we've already passed)
+      if (worst.sConflict > this.s + 1 && (!la || Math.abs(la.s - worst.sConflict) > 20 || la.id !== "hold")) this.announce(worst);
       return;
     }
     this.commit(worst);

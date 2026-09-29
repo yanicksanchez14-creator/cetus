@@ -38,9 +38,9 @@ Cetus asks a simple question: **if we knew where each whale was, how much cheape
 |---|---|---|
 | What the ship knows | Whale position ± tens to hundreds of metres, plus a forecast | "A whale is within \~20–100 km of this buoy" |
 | Typical response | Keep 16 kn, steer 1–2 km around the whale (slow down only for groups or late finds) | 10 kn for \~50 km |
-| Extra cost per voyage* | **\~$340** (Buoys), \~$10 (Ships), \~$100 (Mix) | **\~$10.7k**, \~1.4 h late even after catching up |
-| Strike-risk cut vs ignoring whales* | **\~95%** with Buoys; \~85% with ships alone, \~78% with ships + port stations (a gap within the noise of 120 voyages) | **\~84%** (slower hits are less deadly, at a high price) |
-| Share of a normal trip (\~$224k) | \~0.005–0.15% | \~5% |
+| Extra cost per voyage* | **\~$150** (Buoys), \~$100 (Ships), \~$100 (Mix) | **\~$10.7k**, \~1.4 h late even after catching up |
+| Strike-risk cut vs ignoring whales* | **\~91%** with Buoys; \~83% with ships alone, \~86% with ships + port stations | **\~84%** (slower hits are less deadly, at a high price) |
+| Share of a normal trip (\~$224k) | \~0.05–0.07% | \~5% |
 
 \*Oakland → Long Beach, 120 random voyages per mode with 8 whales: each strike hotspot (Farallones, Big Sur, Santa Barbara
 Channel) gets a whale \~85% of the time (random spot ±25 km along the lane, random time ±25 min), plus 5 more whales. Risk cut

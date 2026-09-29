@@ -319,8 +319,17 @@ export function decide(ctx: EvalContext): Decision | null {
   // conflict zone half-width follows how uncertain the whale's position is when the ship gets there
   const sig = W0.disc ? W0.discR[kPeak] : Math.sqrt(Math.max(W0.cxx[kPeak], W0.cyy[kPeak]));
   const Z = Math.min(Math.max(6, 3 * sig + 4), 45);
-  let zs0 = Math.max(sC - Z, ctx.shipS + 0.5);
-  let zs1 = Math.min(sC + Z, route.length - 1);
+  // ...but only where the danger actually is: from where 5% of the risk is reached to where 95% is, plus ~3 km.
+  // (A far-off, uncertain whale spreads its risk thinly over a long stretch; slowing for all of it, from right where
+  // the ship is now, would mean slowing long before the whale and long after passing it.)
+  const cTot = cum[cum.length - 1];
+  const kA = cTot > 0 ? Math.max(0, cum.findIndex((c) => c >= 0.05 * cTot)) : kPeak;
+  const kBi = cTot > 0 ? cum.findIndex((c) => c >= 0.95 * cTot) : kPeak;
+  const kB = kBi < 0 ? cum.length - 1 : kBi;
+  let rs0 = Math.min(holdLook[kA].s, sC) - 3, rs1 = Math.max(holdLook[kB].s, sC) + 3;
+  if (rs1 - rs0 < 8) { rs0 = Math.min(rs0, sC - 4); rs1 = Math.max(rs1, sC + 4); }
+  let zs0 = Math.max(Math.max(sC - Z, rs0), ctx.shipS + 0.5);
+  let zs1 = Math.min(Math.min(sC + Z, rs1), route.length - 1);
   // Several whales close together: treat them as one group. The zone covers all of them, and every option's risk
   // counts all of them (a shift away from one whale must not steer into another).
   const others = (ctx.others ?? []).filter((b) => {

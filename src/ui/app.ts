@@ -619,7 +619,7 @@ export class App {
       }
       layers.push(new PathLayer({
         id: "tri", data: links, getPath: (d: any) => [d.from, d.to], widthUnits: "pixels", getWidth: 1,
-        getColor: (d: any) => [120, 235, 255, 95 * d.a], updateTriggers: { getColor: now },
+        getColor: (d: any) => [120, 235, 255, 55 * d.a], updateTriggers: { getColor: now },
       }));
       const lerp = (d: any, u: number): [number, number] => [d.from[0] + (d.to[0] - d.from[0]) * u, d.from[1] + (d.to[1] - d.from[1]) * u];
       // the trail: short pieces behind the head, each fainter than the one before
@@ -628,7 +628,7 @@ export class App {
       for (const d of links) for (let k = 0; k < TRAIL; k++) {
         const u0 = Math.min(1, Math.max(0, d.u - d.dir * k * STEP)), u1 = Math.min(1, Math.max(0, d.u - d.dir * (k + 1) * STEP));
         if (u0 === u1) continue;
-        trail.push({ path: [lerp(d, u0), lerp(d, u1)], alpha: d.a * 150 * (1 - k / TRAIL) ** 2 });
+        trail.push({ path: [lerp(d, u0), lerp(d, u1)], alpha: d.a * 110 * (1 - k / TRAIL) ** 2 });
       }
       layers.push(new PathLayer({
         id: "tri-trail", data: trail, getPath: (d: any) => d.path, widthUnits: "pixels", getWidth: 2, capRounded: true,
@@ -640,7 +640,7 @@ export class App {
       }));
       layers.push(new ScatterplotLayer({
         id: "tri-nodes", data: links, getPosition: (d: any) => d.from, stroked: true, filled: false, radiusUnits: "pixels",
-        getRadius: 3.5, getLineColor: (d: any) => [150, 240, 255, 170 * d.a],
+        getRadius: 3, getLineColor: (d: any) => [150, 240, 255, 105 * d.a],
         lineWidthUnits: "pixels", getLineWidth: 1, updateTriggers: { getPosition: now, getLineColor: now },
       }));
     }

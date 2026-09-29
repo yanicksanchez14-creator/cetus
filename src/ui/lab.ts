@@ -35,10 +35,10 @@ const q = (a: number[], f: number) => { const s = [...a].sort((x, y) => x - y); 
 /** Reference results (120 voyages per mode, 8 whales, precaution = slow) used until you run your own batch. */
 const REFERENCE: Record<ModeId, { usd: number; lateMin: number; riskHold: number; riskTaken: number }> = {
   // riskHold / riskTaken: close passes (<500 m) weighted by lethality at speed, per voyage (hindsight, true whales)
-  ships: { usd: 10, lateMin: 16, riskHold: 0.442, riskTaken: 0.067 },
-  mix: { usd: 97, lateMin: 13, riskHold: 0.442, riskTaken: 0.096 },
-  network: { usd: 335, lateMin: 8, riskHold: 0.442, riskTaken: 0.023 },
-  single: { usd: 10717, lateMin: 86, riskHold: 0.442, riskTaken: 0.071 },
+  ships: { usd: 100, lateMin: 5, riskHold: 0.442, riskTaken: 0.074 },
+  mix: { usd: 101, lateMin: 5, riskHold: 0.442, riskTaken: 0.062 },
+  network: { usd: 147, lateMin: 3, riskHold: 0.442, riskTaken: 0.039 },
+  single: { usd: 10698, lateMin: 86, riskHold: 0.442, riskTaken: 0.070 },
 };
 
 export interface LabSettings { seed: number; whaleCount: number; sensorCount: number; sigmaMs: number; routeId: string }
