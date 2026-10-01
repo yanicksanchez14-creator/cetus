@@ -725,15 +725,6 @@ export class App {
           getDashArray: (o: any) => (o.id === d.chosen.id ? [0, 0] : [4, 4]), extensions: [new PathStyleExtension({ dash: true })],
           updateTriggers: { getColor: now },
         } as any));
-        layers.push(new TextLayer({
-          id: "opt-labels", data: labels, getPosition: (x: any) => x.at,
-          getText: (x: any) => x.o.label,
-          getTextAnchor: (x: any) => (x.side < 0 ? "end" : "start"),
-          getPixelOffset: (x: any) => [x.side * 14, x.row * 16],
-          getSize: 10.5, getColor: (x: any) => (x.o.id === d.chosen.id ? [94, 240, 164, 255 * fade] : [210, 220, 230, 170 * fade]),
-          fontFamily: "Inter, system-ui, sans-serif", fontWeight: 600, characterSet: "auto",
-          outlineWidth: 3, outlineColor: [2, 9, 18, 220], fontSettings: { sdf: true, fontSize: 48, buffer: 10, radius: 10 }, updateTriggers: { getColor: now },
-        }));
       }
       // ship's plan ahead + wake
       layers.push(new PathLayer({
