@@ -39,7 +39,7 @@ b { font-weight: 600; }
 
 /* ---------- top bar ---------- */
 .topbar { position: absolute; top: 14px; left: 14px; right: calc(var(--pw) + 26px); display: flex; align-items: center; gap: 22px; padding: 10px 16px; z-index: 5; }
-.brand { display: flex; align-items: center; gap: 11px; min-width: 250px; }
+.brand { display: flex; align-items: center; gap: 11px; flex: none; min-width: 0; }
 .logo { width: 40px; height: 40px; display: block; filter: drop-shadow(0 0 6px rgba(232, 191, 87, 0.25)); }
 .intro-logo { display: block; width: 116px; height: 116px; margin: -6px 0 6px; filter: drop-shadow(0 0 14px rgba(114, 195, 200, 0.25)); }
 .brand-name { font-weight: 700; letter-spacing: 0.22em; font-size: 15px; }
@@ -56,7 +56,7 @@ b { font-weight: 600; }
 .progress-ship { position: absolute; top: 50%; width: 10px; height: 10px; margin: -5px 0 0 -5px; border-radius: 50%; background: #fff; box-shadow: 0 0 10px #fff; left: 0; }
 .pmark { position: absolute; top: -3px; width: 1px; height: 12px; background: rgba(220, 232, 244, 0.35); pointer-events: none; }
 .pmark::after { content: attr(data-label); position: absolute; top: 13px; left: 50%; transform: translateX(-50%); white-space: nowrap; font-size: 9.5px; color: var(--muted); }
-.ship-readout { display: flex; gap: 16px; font-size: 12px; }
+.ship-readout { display: flex; gap: 16px; font-size: 12px; flex: none; }
 .ship-readout div { display: flex; flex-direction: column; align-items: flex-end; }
 .ship-readout .k { font-size: 9.5px; color: var(--faint); letter-spacing: 0.12em; }
 
@@ -398,7 +398,6 @@ input[type="range"] { width: 100%; accent-color: var(--cyan); height: 16px; }
   .lab-head { flex-wrap: wrap; }
   .lab-tabs { margin: 0; width: 100%; }
   .biz-kpis, .phases { grid-template-columns: 1fr 1fr; }
-  .lab-btn { display: none; }
 }
 
 /* ---------- replay ---------- */
@@ -536,8 +535,12 @@ input[type="range"] { width: 100%; accent-color: var(--cyan); height: 16px; }
 body.resizing { cursor: ew-resize; user-select: none; }
 @media (max-width: 860px) { .panel-grip { display: none; } }
 .topbar { container-type: inline-size; }
-@container (max-width: 900px) { .brand > div { display: none; } .ship-readout > div:nth-child(3) { display: none; } }
-@container (max-width: 740px) { .ship-readout { display: none; } }
+/* the header never pushes Fleet lab off the bar: the subtitle, readout and button label give way first; the CETUS name always stays */
+.voyage { min-width: 110px; }
+@container (max-width: 1050px) { .brand-sub { display: none; } }
+@container (max-width: 960px) { .ship-readout > div:nth-child(3) { display: none; } }
+@container (max-width: 860px) { .ship-readout { display: none; } }
+@container (max-width: 520px) { .lab-btn .lab-txt { display: none; } .lab-btn { padding: 0 9px; } }
 #credits { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: calc(100vw - var(--pw) - 600px); }
 .byline { margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--line); }
 .byline b { color: var(--text); font-weight: 600; }
